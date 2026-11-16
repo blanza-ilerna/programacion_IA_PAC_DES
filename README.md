@@ -91,6 +91,11 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 > sirve con cualquier servidor compatible), el script `kafka_to_minio.py` y los alias `minio-*`.
 > Comprobar que responde: `python -c "import urllib.request;print(urllib.request.urlopen('http://minio:9000/health').status)"`.
 > La imagen no incluye el cliente `mc`.
+>
+> **Consola web (:19001).** Exige login (`admin` / `Ilerna_Programaci0n`; no existe modo anónimo). En
+> Codespaces el login puede fallar con `SignatureDoesNotMatch` por el proxy de puertos. Alternativa sin
+> consola: `python tests/list_datalake.py` (lista objetos, tamaños y particiones; `--preview` muestra
+> el contenido del último archivo).
 
 ## Estructura del proyecto
 
