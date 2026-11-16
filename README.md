@@ -105,13 +105,17 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │   │   ├── transformations.py          # UDF to_celsius (F/K → °C)
 │   │   └── validators.py               # Validación de schema de mensajes
 │   ├── 03_storage/
-│   │   ├── kafka_to_minio.py           # Cold path: sensors_clean → MinIO NDJSON (60s ventana)
-│   │   └── kafka_to_influx.py          # Alternativa directa Kafka → InfluxDB (no en uso)
+│   │   └── kafka_to_minio.py           # Cold path: sensors_clean → MinIO NDJSON (60s ventana)
 │   ├── api/
 │   │   ├── main.py                     # Hito 4: FastAPI REST (/machines, /alerts, /stats)
 │   │   └── anomaly_model.py            # IsolationForest: train + predict
-│   └── 05_ui/
-│       └── app.py                      # Hito 4: Streamlit + DuckDB Lambda Query hot+cold
+│   └── 05_ui/                          # Hito 4: Streamlit + DuckDB Lambda Query hot+cold
+│       ├── app.py                      # Punto de entrada: página, sidebar y reparto de pestañas
+│       ├── settings.py                 # Configuración (variables de entorno)
+│       ├── datasources.py              # Acceso a datos: InfluxDB, MinIO/DuckDB, Flink, Kafka
+│       └── views/                      # Una pestaña por módulo (cada una expone render())
+│           ├── realtime.py  history.py  alerts.py  lambda_query.py  ai_anomalies.py
+│           └── pipeline_health.py  hash_security.py  advanced_models.py  ayuda.py
 │
 ├── jobs/
 │   ├── flink_normalization_job.py      # Hito 2: Table API + UDF + StatementSet (2 sinks)
@@ -132,14 +136,16 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │           │   └── datasources.yml     # InfluxDB (Flux) + Infinity (HTTP genérico)
 │           └── dashboards/
 │               ├── provider.yml
-│               └── redpanda.json       # Dashboard Redpanda/Kafka (brokers, topics, watermarks)
+│               ├── telemetria.json     # Dashboard Telemetría IoT (InfluxDB: temperatura, alertas, throughput)
+│               └── redpanda.json       # Dashboard Redpanda/Kafka (brokers, salud, mensajes por topic)
 │
 ├── tests/
 │   ├── test_connectivity.sh            # Smoke test: ¿responden todos los servicios?
 │   ├── test_flow.py                    # Test E2E: publica mensaje y verifica en cada capa
 │   ├── test_processing.py              # Tests unitarios de transformations y validators
 │   ├── test_databases.py               # Verifica InfluxDB, MinIO y DuckDB query
-│   └── verify_pipeline.sh              # Diagnóstico completo del pipeline en ejecución
+│   ├── verify_pipeline.sh              # Diagnóstico completo del pipeline en ejecución
+│   └── check_grafana_endpoints.py      # Qué endpoints/campos usan los dashboards de Grafana y si responden
 │
 └── docs/
     ├── 00_smoke_test_checklist.md      # Checklist de validación paso a paso
