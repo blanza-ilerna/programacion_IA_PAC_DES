@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -63,18 +63,8 @@
           "columns": [
             {
               "selector": "node_id",
-              "text": "Node ID",
+              "text": "Brokers",
               "type": "number"
-            },
-            {
-              "selector": "num_cores",
-              "text": "Cores",
-              "type": "number"
-            },
-            {
-              "selector": "membership_status",
-              "text": "Estado",
-              "type": "string"
             }
           ],
           "parser": "backend"
@@ -84,7 +74,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Topics del pipeline",
+      "title": "Topics del pipeline (definición)",
       "gridPos": {
         "x": 4,
         "y": 0,
@@ -160,10 +150,35 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed",
-            "fixedColor": "green"
+            "mode": "thresholds"
           },
-          "noValue": "—"
+          "noValue": "—",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "true": {
+                  "text": "✔ Saludable",
+                  "color": "green",
+                  "index": 0
+                },
+                "false": {
+                  "text": "✖ Con problemas",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          }
         }
       },
       "targets": [
@@ -265,7 +280,7 @@
     {
       "id": 5,
       "type": "table",
-      "title": "Topics — lista",
+      "title": "Topics — definición del pipeline",
       "gridPos": {
         "x": 12,
         "y": 0,
@@ -350,26 +365,42 @@
           ],
           "parser": "backend"
         }
-      ]
+      ],
+      "description": "Datos fijos (no consultados): ver Redpanda Console (:18080) para el estado real de cada topic."
     },
     {
       "id": 6,
       "type": "stat",
-      "title": "sensors_raw — mensajes",
-      "description": "High-watermark: total mensajes escritos",
-      "gridPos": { "x": 0, "y": 10, "w": 6, "h": 4 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "infinity" },
+      "title": "sensors_raw — mensajes acumulados",
+      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "infinity"
+      },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "text": {}
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
           "unit": "short",
-          "noValue": "0"
+          "noValue": "sin datos (¿Pandaproxy :8082?)"
         }
       },
       "targets": [
@@ -379,31 +410,54 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:9644/v1/partitions/kafka/sensors_raw/0",
-          "url_options": { "method": "GET" },
+          "url": "http://redpanda:8082/topics/sensors_raw/partitions/0/offsets",
+          "url_options": {
+            "method": "GET"
+          },
           "root_selector": "",
-          "columns": [{ "selector": "high_watermark", "text": "Mensajes", "type": "number" }]
+          "columns": [
+            {
+              "selector": "end_offset",
+              "text": "Mensajes",
+              "type": "number"
+            }
+          ]
         }
       ]
     },
     {
       "id": 7,
       "type": "stat",
-      "title": "sensors_clean — mensajes",
-      "description": "High-watermark: total mensajes escritos",
-      "gridPos": { "x": 6, "y": 10, "w": 6, "h": 4 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "infinity" },
+      "title": "sensors_clean — mensajes acumulados",
+      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "gridPos": {
+        "x": 6,
+        "y": 10,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "infinity"
+      },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "text": {}
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "green" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
           "unit": "short",
-          "noValue": "0"
+          "noValue": "sin datos (¿Pandaproxy :8082?)"
         }
       },
       "targets": [
@@ -413,31 +467,54 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:9644/v1/partitions/kafka/sensors_clean/0",
-          "url_options": { "method": "GET" },
+          "url": "http://redpanda:8082/topics/sensors_clean/partitions/0/offsets",
+          "url_options": {
+            "method": "GET"
+          },
           "root_selector": "",
-          "columns": [{ "selector": "high_watermark", "text": "Mensajes", "type": "number" }]
+          "columns": [
+            {
+              "selector": "end_offset",
+              "text": "Mensajes",
+              "type": "number"
+            }
+          ]
         }
       ]
     },
     {
       "id": 8,
       "type": "stat",
-      "title": "sensors_verified — mensajes",
-      "description": "High-watermark: total mensajes verificados (hash OK)",
-      "gridPos": { "x": 12, "y": 10, "w": 6, "h": 4 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "infinity" },
+      "title": "sensors_verified — mensajes acumulados",
+      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "infinity"
+      },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "text": {}
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "green" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
           "unit": "short",
-          "noValue": "0"
+          "noValue": "sin datos (¿Pandaproxy :8082?)"
         }
       },
       "targets": [
@@ -447,31 +524,70 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:9644/v1/partitions/kafka/sensors_verified/0",
-          "url_options": { "method": "GET" },
+          "url": "http://redpanda:8082/topics/sensors_verified/partitions/0/offsets",
+          "url_options": {
+            "method": "GET"
+          },
           "root_selector": "",
-          "columns": [{ "selector": "high_watermark", "text": "Mensajes", "type": "number" }]
+          "columns": [
+            {
+              "selector": "end_offset",
+              "text": "Mensajes",
+              "type": "number"
+            }
+          ]
         }
       ]
     },
     {
       "id": 9,
       "type": "stat",
-      "title": "sensors_invalid (DLQ) — mensajes",
-      "description": "High-watermark: mensajes rechazados por hash-chain",
-      "gridPos": { "x": 18, "y": 10, "w": 6, "h": 4 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "infinity" },
+      "title": "sensors_invalid — mensajes acumulados (DLQ)",
+      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "gridPos": {
+        "x": 18,
+        "y": 10,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "infinity"
+      },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "text": {}
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "orange" },
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "short",
-          "noValue": "0"
+          "noValue": "sin datos (¿Pandaproxy :8082?)",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
         }
       },
       "targets": [
@@ -481,12 +597,28 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:9644/v1/partitions/kafka/sensors_invalid/0",
-          "url_options": { "method": "GET" },
+          "url": "http://redpanda:8082/topics/sensors_invalid/partitions/0/offsets",
+          "url_options": {
+            "method": "GET"
+          },
           "root_selector": "",
-          "columns": [{ "selector": "high_watermark", "text": "Mensajes", "type": "number" }]
+          "columns": [
+            {
+              "selector": "end_offset",
+              "text": "Mensajes",
+              "type": "number"
+            }
+          ]
         }
       ]
+    }
+  ],
+  "links": [
+    {
+      "title": "Telemetría IoT",
+      "type": "link",
+      "icon": "external link",
+      "url": "/d/ilerna-telemetria"
     }
   ]
 }
