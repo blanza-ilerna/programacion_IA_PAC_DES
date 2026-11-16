@@ -78,7 +78,8 @@ echo "── HTTP / Web UIs ─────────────────�
 check_http "Redpanda Console" "http://redpanda-console:8080/"
 check_http "Flink UI"         "http://jobmanager:8081/"
 check_http "InfluxDB UI"      "http://influxdb:8086/health"
-check_http "MinIO Console"    "http://minio:9001/"
+check_http "S3 (RustFS) health" "http://minio:9000/health"
+check_http "S3 (RustFS) Console" "http://minio:9001/"
 check_http "Grafana"          "http://grafana:3000/api/health"
 
 echo ""

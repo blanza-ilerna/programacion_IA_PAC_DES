@@ -74,14 +74,8 @@ except Exception as e:
     print(f'    \033[33m⚠️  MinIO no disponible: {e}\033[0m', file=sys.stderr)
 " 2>&1 || true
 
-# Configurar mc alias para comandos desde el devcontainer
-MINIO_CTR="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i minio | head -1 || true)"
-if [[ -n "${MINIO_CTR}" ]]; then
-  docker exec "${MINIO_CTR}" mc alias set local http://localhost:9000 admin Ilerna_Programaci0n \
-    > /dev/null 2>&1 \
-    && echo -e "    ${GREEN}✅ mc alias 'local' configurado${NC}" \
-    || echo -e "    ${YELLOW}⚠️  No se pudo configurar mc alias${NC}"
-fi
+# (El servidor S3 es RustFS: no incluye el cliente `mc`, por lo que ya no se
+#  configura ningún alias. El bucket se crea arriba con la librería Python `minio`.)
 
 # ── 3. Jobs Flink ────────────────────────────────────────────
 echo ""

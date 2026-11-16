@@ -66,7 +66,7 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
                               · DuckDB lee con read_json + hive_partitioning=true
                                       │
                                       ▼
-                              [MinIO]  :19000/:19001  bucket=datalake
+                              [S3: RustFS]  :19000/:19001  bucket=datalake
 ```
 
 ## Servicios Docker
@@ -81,8 +81,14 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 | InfluxDB         | 18086          | Base de datos de series temp.  | admin / Ilerna_Programaci0n |
 | Streamlit        | 18501          | Dashboard interactivo          | —                           |
 | JupyterLab       | 18888          | Notebooks de análisis          | —                           |
-| MinIO            | 19000 / 19001  | S3 API / Consola web           | admin / Ilerna_Programaci0n |
+| RustFS (S3)      | 19000 / 19001  | S3 API / Consola web (host `minio`) | admin / Ilerna_Programaci0n |
 | Redpanda         | 19092          | Kafka-compatible broker        | —                           |
+
+> **Nota sobre el almacenamiento S3.** MinIO dejó de publicar imágenes oficiales (repositorio
+> archivado en abril de 2026), así que el cold path usa **RustFS** (`rustfs/rustfs:1.0.6`), compatible
+> con la API S3. Para no tocar el código, el servicio sigue llamándose `minio` en la red Docker
+> (`MINIO_ENDPOINT=minio:9000`) y el cliente Python `minio` funciona igual. Comprobar que responde:
+> `curl http://minio:9000/health`. La imagen no incluye el cliente `mc`.
 
 ## Estructura del proyecto
 
@@ -257,7 +263,7 @@ Desde la pestaña **Ports** de Codespaces:
 | Redpanda Console  | 18080  | Topics Kafka y mensajes        |
 | JupyterLab        | 18888  | Notebooks de análisis          |
 | InfluxDB          | 18086  | Series temporales (hot path)   |
-| MinIO Console     | 19001  | Archivos NDJSON (cold path)    |
+| Consola S3 (RustFS) | 19001 | Archivos NDJSON (cold path)  |
 
 ### 7. JupyterLab (análisis ad-hoc)
 
