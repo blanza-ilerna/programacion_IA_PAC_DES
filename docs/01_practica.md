@@ -490,7 +490,9 @@ curl -s "http://localhost:8000/machines/machine-004/predict?temperature_c=85.0"
 
 ---
 
-### Streamlit Dashboard — `src/05_ui/app.py`
+### Streamlit Dashboard — `src/05_ui/`
+
+`app.py` es el punto de entrada; cada pestaña vive en `src/05_ui/views/` y el acceso a datos en `datasources.py`.
 
 ```bash
 streamlit run src/05_ui/app.py --server.port 8501
@@ -501,7 +503,7 @@ streamlit run src/05_ui/app.py --server.port 8501
 
 **📡 Tiempo Real**
 - Gauges de temperatura por máquina (verde = normal, rojo = alerta)
-- Auto-refresco cada 5 segundos
+- Auto-refresco cada 5 segundos (solo las pestañas en vivo; Lambda, IA y Modelos Avanzados se ejecutan bajo demanda)
 
 **📈 Historial**
 - Línea temporal de temperatura media por minuto
@@ -942,10 +944,9 @@ DuckDB es un motor OLAP embebido (sin servidor), perfecto para análisis interac
 | `src/api/main.py` | `paho-mqtt` | ≥2.0 | Publicación manual vía MQTT |
 | `src/api/anomaly_model.py` | `scikit-learn` | latest | IsolationForest |
 | `src/api/anomaly_model.py` | `numpy` | ≥1.24 | Arrays para ML |
-| `src/05_ui/app.py` | `streamlit` | latest | Dashboard interactivo |
-| `src/05_ui/app.py` | `duckdb` | latest | Query federada Lambda (httpfs) |
-| `src/05_ui/app.py` | `plotly` | latest | Gráficas interactivas |
-| `src/05_ui/app.py` | `minio` | latest | Listado Parquet cold path |
+| `src/05_ui/` | `streamlit` | latest | Dashboard interactivo (fragmentos con auto-refresco) |
+| `src/05_ui/datasources.py` | `duckdb` | latest | Query federada Lambda (httpfs sobre RustFS) |
+| `src/05_ui/views/` | `plotly` | latest | Gráficas interactivas |
 | `notebooks/*.ipynb` | `jupyterlab` | latest | Exploración de datos |
-| `notebooks/*.ipynb` | `duckdb` | latest | Query RustFS Parquet con httpfs |
+| `notebooks/*.ipynb` | `duckdb` | latest | Query del cold path (NDJSON en RustFS) con httpfs |
 | `notebooks/*.ipynb` | `plotly` | latest | Visualización interactiva |

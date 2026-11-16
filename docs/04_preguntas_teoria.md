@@ -242,11 +242,12 @@ Cada mensaje lleva un campo `hash` calculado como `SHA256(hash_anterior + payloa
 
 **¿Qué hace `init_pipeline.sh` al ejecutarlo?**
 
-1. Crea los 4 topics Kafka en Redpanda (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`).
+1. Recrea los 4 topics Kafka en Redpanda (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`): borra y crea, así que **purga los mensajes** y reinicia la hash-chain.
 2. Crea el bucket `datalake` en RustFS.
 3. Lanza los 3 jobs Flink (si no están ya corriendo): normalization, hash_verifier, analytics.
 4. Arranca `kafka_to_minio.py` como proceso Python en background (cold path).
-5. Añade aliases de desarrollo a `~/.bashrc` (`sim`, `bridge`, `api`, `ui`, `flink-jobs`, `rustfs-writer`, etc.).
+5. Prepara las herramientas S3 opcionales (AWS CLI con la función `s3` y el cliente web s3manager en :19002). Si fallan, solo avisan.
+6. Añade aliases de desarrollo a `~/.bashrc` (`sim`, `bridge`, `api`, `ui`, `flink-jobs`, `rustfs-writer`, etc.).
 
 ---
 
@@ -269,7 +270,8 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 | 18501 | Streamlit | Dashboard interactivo |
 | 18888 | JupyterLab | Notebooks de análisis |
 | 19000 | RustFS S3 API | Acceso programático al datalake |
-| 19001 | RustFS Console | UI web de RustFS |
+| 19001 | RustFS Console | UI web de RustFS (el login puede fallar en Codespaces) |
+| 19002 | S3 Web (s3manager) | Navegar el bucket `datalake`, solo lectura |
 | 19092 | Redpanda Kafka API | Producers/consumers Kafka |
 
 ---

@@ -5,7 +5,7 @@ Completa en orden: primero infraestructura, luego pipeline.
 
 > **Puertos externos** (los que usa el host/Codespaces):
 > MQTT=11883 · Kafka=19092 · Redpanda Console=18080 · Flink UI=18081
-> InfluxDB=18086 · RustFS S3=19000 · RustFS UI=19001 · Grafana=13000
+> InfluxDB=18086 · RustFS S3=19000 · RustFS UI=19001 · S3 Web=19002 · Grafana=13000
 > FastAPI=18000 · Streamlit=18501 · Jupyter=18888
 
 ---
@@ -35,7 +35,8 @@ Comprobar que están **Up** (healthy donde aplica):
 - [ ] `jobmanager` — Up, **healthy**
 - [ ] `taskmanager` — Up
 - [ ] `influxdb` — Up, **healthy**
-- [ ] `minio` — Up, **healthy**
+- [ ] `minio` (RustFS) — Up (sin healthcheck: es normal que no ponga *healthy*)
+- [ ] `s3web` (cliente web S3) — Up (lo lanza `init_pipeline.sh`; opcional)
 - [ ] `grafana` — Up
 
 Si alguno está `Exited` o `unhealthy`:
@@ -65,8 +66,12 @@ En Codespaces: pestaña **Ports** → abrir cada puerto en el navegador.
 - [ ] **Redpanda Console** (18080) — se carga la lista de tópicos
 - [ ] **Flink UI** (18081) — se ve el Overview y al menos 1 TaskManager registrado
 - [ ] **InfluxDB** (18086) — pantalla de login, entrar con `admin` / `Ilerna_Programaci0n`
-- [ ] **RustFS Console** (19001) — pantalla de login, entrar con `admin` / `Ilerna_Programaci0n`
-- [ ] **Grafana** (13000) — pantalla de login, entrar con `admin` / `Ilerna_Programaci0n`
+- [ ] **RustFS Console** (19001) — pantalla de login, `admin` / `Ilerna_Programaci0n`. En Codespaces el login
+      puede fallar (`SignatureDoesNotMatch` por el proxy de puertos): no es bloqueante.
+- [ ] **S3 Web** (19002) — se ve el bucket `datalake` (solo lectura). Si no carga: `s3web status`
+- [ ] **Grafana** (13000) — entra sin login (acceso anónimo; admin: `admin` / `Ilerna_Programaci0n`).
+      Dashboards *Telemetría IoT* y *Redpanda / Kafka* con datos. Si algún panel falla:
+      `python tests/check_grafana_panels.py`
 
 ---
 

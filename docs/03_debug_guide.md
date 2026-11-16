@@ -212,13 +212,28 @@ docker logs $(docker ps -qf 'label=com.docker.compose.service=grafana') 2>&1 | g
 ### El dashboard muestra "No data" aunque InfluxDB tenga datos
 
 Causas más comunes:
-1. **Datos fuera del rango de tiempo** — Los datos tienen timestamps antiguos (el analytics job procesó el backlog). Cambia el rango del dashboard a **Last 3 hours**.
-2. **Analytics job recién reiniciado** — Espera ~1 min para que la ventana Tumble cierre.
+1. **Datos fuera del rango de tiempo** — El dashboard *Telemetría IoT* usa *Last 30 minutes*. Si el analytics job procesó un backlog antiguo, amplía el rango.
+2. **Analytics job recién reiniciado** — Espera 2-3 min: cada punto es una ventana Tumble de 1 min que solo se escribe al cerrar (watermark de 10 s).
 3. **Jobs Flink caídos** — Verificar con `flink-jobs` y relanzar con `flink-restart`.
 
-### Errores 400 en paneles del dashboard Redpanda/Kafka
+### Ver el error real de cada panel
 
-El plugin Infinity hace peticiones REST a Redpanda. Si devuelve 404, las URLs configuradas en el dashboard apuntan a endpoints que no existen en la versión de Redpanda. Es un problema de compatibilidad del dashboard — los datos de InfluxDB (dashboard Telemetría IoT) no se ven afectados.
+```bash
+python tests/check_grafana_panels.py      # ejecuta cada panel por /api/ds/query: error o nº de filas
+python tests/check_grafana_endpoints.py   # endpoints y campos que consumen los dashboards
+```
+
+### Errores 404 en paneles del dashboard Redpanda/Kafka
+
+El plugin Infinity hace peticiones REST desde el contenedor de Grafana. Un 404 significa que la URL no existe en esta versión de Redpanda. Comprobado en Redpanda v25.3: la Admin API (`:9644`) no da el número de mensajes por topic y Pandaproxy (`:8082`) devuelve 404 en `/topics/<t>/partitions/0/offsets`. Por eso los paneles de mensajes usan la API REST de **Redpanda Console**: `http://redpanda-console:8080/api/topics/<t>/partitions` → `waterMarkHigh`.
+
+### Un panel Infinity da error tras cambiar la URL a otro host
+
+El host debe estar en `allowedHosts` del datasource Infinity (`config/grafana/provisioning/datasources/datasources.yml`). Los datasources **solo se leen al arrancar Grafana**:
+
+```bash
+docker restart $(docker ps -qf label=com.docker.compose.service=grafana)
+```
 
 ---
 
@@ -248,7 +263,7 @@ curl -s http://localhost:8000/alerts | python3 -m json.tool
 Seguir este orden cuando el pipeline no funciona:
 
 ```
-1. ¿Están corriendo los 4 Flink jobs?
+1. ¿Están corriendo los 3 Flink jobs?
    → flink-jobs
    → Si no: flink-restart
 
@@ -267,11 +282,12 @@ Seguir este orden cuando el pipeline no funciona:
 5. ¿Grafana muestra datos?
    → Verificar health del datasource
    → Ejecutar query directa via /api/ds/query
+   → python tests/check_grafana_panels.py (error real de cada panel)
    → Si query OK pero dashboard "No data": cambiar rango de tiempo
 
 6. ¿RustFS tiene archivos?
-   → python3 -c "from minio import Minio; ..."
-   → Si no después de 10 min: rustfs-writer &
+   → python tests/list_datalake.py   (o: s3 ls s3://datalake/ --recursive)
+   → Si no después de 2 min: rustfs-status ; rustfs-writer &
 ```
 
 ---
@@ -286,6 +302,11 @@ Seguir este orden cuando el pipeline no funciona:
 | `sim` | Simulador de sensores (5 máquinas) |
 | `bridge` | Puente MQTT → Redpanda |
 | `rustfs-writer` | Writer Python directo sensors_clean → RustFS |
+| `rustfs-status` / `rustfs-log` | Estado y log del writer del cold path |
+| `s3` | AWS CLI contra RustFS (`s3 ls s3://datalake/ --recursive`) |
+| `s3web` | Cliente web S3 en :19002 (`s3web start\|stop\|status`) |
+| `python tests/list_datalake.py` | Contenido del bucket sin consola web |
+| `python tests/check_grafana_panels.py` | Error real de cada panel de Grafana |
 | `verify` | Verificación rápida del pipeline |
 | `verify-db` | Verificación detallada de bases de datos y Grafana |
 | `resources` | CPU, RAM, disco y stats de contenedores |

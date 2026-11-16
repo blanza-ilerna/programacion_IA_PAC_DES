@@ -140,9 +140,13 @@ python src/01_ingestion/mqtt_to_redpanda_bridge.py
 # 3. Jobs Flink (desde el jobmanager)
 flink-restart
 
-# 4. Cold path: Kafka → RustFS
+# 4. Cold path: Kafka → RustFS (ya lo arranca init_pipeline.sh)
 python src/03_storage/kafka_to_minio.py
-# alias: rustfs-writer
+# alias: rustfs-writer   ·  estado: rustfs-status  ·  log: rustfs-log
+
+# Ver el contenido del bucket sin consola web
+python tests/list_datalake.py --preview
+# o: s3 ls s3://datalake/ --recursive   ·   web: puerto 19002 (s3web)
 
 # 5. FastAPI
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -167,7 +171,8 @@ streamlit run src/05_ui/app.py --server.port 8501
         ("Streamlit",       "18501",       "Este dashboard",                 "—"),
         ("JupyterLab",      "18888",       "Notebooks de análisis",          "—"),
         ("RustFS S3 API",    "19000",       "API S3 compatible",              "admin / Ilerna_Programaci0n"),
-        ("RustFS Console",   "19001",       "Consola web RustFS",              "admin / Ilerna_Programaci0n"),
+        ("RustFS Console",   "19001",       "Consola web RustFS (login puede fallar en Codespaces)", "admin / Ilerna_Programaci0n"),
+        ("S3 Web",           "19002",       "Navegar el bucket (s3manager, solo lectura)", "—"),
         ("Redpanda",        "19092",       "Broker Kafka-compatible",        "—"),
     ]
     st.dataframe(
