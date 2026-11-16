@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -22,7 +22,7 @@
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 4,
+        "w": 6,
         "h": 4
       },
       "datasource": {
@@ -72,65 +72,13 @@
       ]
     },
     {
-      "id": 2,
-      "type": "stat",
-      "title": "Topics del pipeline (definición)",
-      "gridPos": {
-        "x": 4,
-        "y": 0,
-        "w": 4,
-        "h": 4
-      },
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "infinity"
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "count"
-          ]
-        },
-        "text": {}
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
-          },
-          "unit": "short",
-          "noValue": "0"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "type": "json",
-          "source": "inline",
-          "format": "table",
-          "data": "[{\"topic\":\"sensors_raw\"},{\"topic\":\"sensors_clean\"},{\"topic\":\"sensors_verified\"},{\"topic\":\"sensors_invalid\"}]",
-          "columns": [
-            {
-              "selector": "topic",
-              "text": "Topic",
-              "type": "string"
-            }
-          ],
-          "parser": "backend"
-        }
-      ]
-    },
-    {
       "id": 3,
       "type": "stat",
       "title": "Estado del cluster",
       "gridPos": {
-        "x": 8,
+        "x": 6,
         "y": 0,
-        "w": 4,
+        "w": 6,
         "h": 4
       },
       "datasource": {
@@ -196,7 +144,7 @@
             {
               "selector": "is_healthy",
               "text": "Estado",
-              "type": "string"
+              "type": "boolean"
             }
           ],
           "parser": "backend"
