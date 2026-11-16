@@ -79,14 +79,15 @@ check_http "Redpanda Console" "http://redpanda-console:8080/"
 check_http "Flink UI"         "http://jobmanager:8081/"
 check_http "InfluxDB UI"      "http://influxdb:8086/health"
 check_http "S3 (RustFS) health" "http://minio:9000/health"
-check_http "S3 (RustFS) Console" "http://minio:9001/"
 check_http "Grafana"          "http://grafana:3000/api/health"
 
 echo ""
 echo "── TCP / Protocolos ────────────────────────────────────"
 check_tcp "MQTT Broker"    "mosquitto"  "1883"
 check_tcp "Redpanda Kafka" "redpanda"   "29092"
-check_tcp "MinIO S3 API"   "minio"      "9000"
+check_tcp "S3 API (RustFS)" "minio"     "9000"
+# La consola de RustFS responde 403 en "/" (sirve bajo otra ruta), así que se comprueba solo el puerto
+check_tcp "Consola S3 (RustFS)" "minio" "9001"
 
 echo ""
 echo "──────────────────────────────────────────────────────"

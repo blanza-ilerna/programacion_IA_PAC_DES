@@ -21,6 +21,7 @@ import urllib.request
 
 REDPANDA_ADMIN = os.getenv("REDPANDA_ADMIN", "http://redpanda:9644")
 REDPANDA_PROXY = os.getenv("REDPANDA_PROXY", "http://redpanda:8082")
+CONSOLE_URL    = os.getenv("CONSOLE_URL",    "http://redpanda-console:8080")
 FLINK_URL      = os.getenv("FLINK_URL",      "http://jobmanager:8081")
 FASTAPI_URL    = os.getenv("FASTAPI_URL",    "http://localhost:8000")
 INFLUX_URL     = os.getenv("INFLUX_URL",     "http://influxdb:8086")
@@ -64,7 +65,11 @@ def check_field(name: str, url: str, field: str, required: bool = True) -> None:
             keys = sorted(data) if isinstance(data, dict) else type(data).__name__
             report("FAIL" if required else "INFO", name, f"campo '{field}' ausente; campos: {keys}")
     except urllib.error.HTTPError as e:
-        report("FAIL" if required else "INFO", name, f"HTTP {e.code} en {url}")
+        try:
+            body = e.read().decode("utf-8", "replace")[:160].replace("\n", " ")
+        except Exception:
+            body = ""
+        report("FAIL" if required else "INFO", name, f"HTTP {e.code} en {url} — {body}")
     except Exception as e:
         report("FAIL" if required else "INFO", name, f"{type(e).__name__}: {e} ({url})")
 
@@ -91,6 +96,26 @@ def main() -> None:
         check_field(f"Pandaproxy {t}", f"{REDPANDA_PROXY}/topics/{t}/partitions/0/offsets", "end_offset")
     check_field("Admin API partitions (antiguo, ¿high_watermark?)",
                 f"{REDPANDA_ADMIN}/v1/partitions/kafka/sensors_raw/0", "high_watermark", required=False)
+
+    print("\n── Fuentes alternativas de offsets (diagnóstico, solo INFO)")
+    try:
+        topics = get_json(f"{REDPANDA_PROXY}/topics")
+        report("OK" if "sensors_raw" in topics else "INFO", "Pandaproxy lista de topics", str(topics)[:140])
+    except urllib.error.HTTPError as e:
+        report("INFO", "Pandaproxy lista de topics", f"HTTP {e.code} — {e.read().decode('utf-8', 'replace')[:120]}")
+    except Exception as e:
+        report("INFO", "Pandaproxy lista de topics", f"{type(e).__name__}: {e}")
+    check_field("Pandaproxy detalle topic", f"{REDPANDA_PROXY}/topics/sensors_raw", "name", required=False)
+    check_field("Console REST /api/topics", f"{CONSOLE_URL}/api/topics", "topics", required=False)
+    check_field("Console REST partitions", f"{CONSOLE_URL}/api/topics/sensors_raw/partitions", "partitions", required=False)
+    try:
+        with urllib.request.urlopen(f"{REDPANDA_ADMIN}/public_metrics", timeout=5) as r:
+            text = r.read().decode("utf-8", "replace")
+        line = next((ln for ln in text.splitlines() if ln.startswith("redpanda_kafka_max_offset") and "sensors_raw" in ln), None)
+        report("OK" if line else "INFO", "Admin /public_metrics redpanda_kafka_max_offset",
+               line[:140] if line else "métrica no encontrada para sensors_raw")
+    except Exception as e:
+        report("INFO", "Admin /public_metrics", f"{type(e).__name__}: {e}")
 
     print("\n── InfluxDB (telemetria.json)")
     try:

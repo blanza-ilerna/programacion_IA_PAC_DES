@@ -88,11 +88,11 @@ if [[ -n "${JM_ID}" ]]; then
     "curl -s http://localhost:8081/jobs/overview 2>/dev/null || echo '{\"jobs\":[]}'")
 
   RUNNING_JOBS=$(echo "${JOBS_JSON}" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(len([j for j in d.get('jobs',[]) if j['status']=='RUNNING']))" \
+    "import sys,json; d=json.load(sys.stdin); print(len([j for j in d.get('jobs',[]) if j['state']=='RUNNING']))" \
     2>/dev/null || echo 0)
 
   FAILED_IDS=$(echo "${JOBS_JSON}" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status']=='FAILED'))" \
+    "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state']=='FAILED'))" \
     2>/dev/null || echo "")
 
   if [[ "${RUNNING_JOBS}" -eq 3 ]]; then
@@ -112,7 +112,7 @@ if [[ -n "${JM_ID}" ]]; then
     if [[ "${RUNNING_JOBS}" -gt 0 && "${RUNNING_JOBS}" -lt 3 ]]; then
       echo -e "    ${YELLOW}⚠️  Pipeline incompleto (${RUNNING_JOBS}/3 running) — reiniciando todos${NC}"
       ALL_IDS=$(echo "${JOBS_JSON}" | python3 -c \
-        "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status']=='RUNNING'))" \
+        "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state']=='RUNNING'))" \
         2>/dev/null || echo "")
       for ID in ${ALL_IDS}; do
         docker exec "${JM_ID}" bash -c \
@@ -145,7 +145,7 @@ if [[ -n "${JM_ID}" ]]; then
         | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-print(len([j for j in d.get('jobs',[]) if j['status']=='RUNNING']))
+print(len([j for j in d.get('jobs',[]) if j['state']=='RUNNING']))
 " 2>/dev/null || echo 0)
       if [[ "${RUNNING_COUNT}" -ge 3 ]]; then
         echo -e " ${GREEN}✅ Los 3 jobs están RUNNING${NC}"
@@ -242,7 +242,7 @@ flink-restart() {
     | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status'] not in ('CANCELED','FINISHED')))
+print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state'] not in ('CANCELED','FINISHED')))
 " 2>/dev/null || echo "")
   if [[ -n "${ACTIVE_IDS}" ]]; then
     for ID in ${ACTIVE_IDS}; do
