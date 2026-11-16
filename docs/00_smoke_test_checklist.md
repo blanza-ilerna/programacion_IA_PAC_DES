@@ -288,7 +288,7 @@ docker exec $JM flink run -py /opt/flink/jobs/flink_normalization_job.py &
 docker exec $JM flink run -py /opt/flink/jobs/flink_analytics_job.py &
 
 # (kafka_to_minio.py ya arrancó automáticamente con init_pipeline.sh)
-# Si necesitas relanzarlo: python src/03_storage/kafka_to_minio.py &  (alias: minio-writer)
+# Si necesitas relanzarlo: python src/03_storage/kafka_to_minio.py &  (alias: rustfs-writer)
 
 # 6. FastAPI — Hito 4 (Terminal 3) — alias: api
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload

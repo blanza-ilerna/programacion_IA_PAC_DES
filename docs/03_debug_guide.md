@@ -171,7 +171,7 @@ El cold path usa `kafka_to_minio.py` — arranca automáticamente con `init_pipe
 Si no está corriendo:
 
 ```bash
-pgrep -f kafka_to_minio || minio-writer &
+pgrep -f kafka_to_minio || rustfs-writer &
 cat /tmp/minio_writer.log   # ver log
 ```
 
@@ -271,7 +271,7 @@ Seguir este orden cuando el pipeline no funciona:
 
 6. ¿RustFS tiene archivos?
    → python3 -c "from minio import Minio; ..."
-   → Si no después de 10 min: minio-writer &
+   → Si no después de 10 min: rustfs-writer &
 ```
 
 ---
@@ -285,7 +285,7 @@ Seguir este orden cuando el pipeline no funciona:
 | `flink-restart` | Relanza los 3 jobs Flink |
 | `sim` | Simulador de sensores (5 máquinas) |
 | `bridge` | Puente MQTT → Redpanda |
-| `minio-writer` | Writer Python directo sensors_clean → RustFS |
+| `rustfs-writer` | Writer Python directo sensors_clean → RustFS |
 | `verify` | Verificación rápida del pipeline |
 | `verify-db` | Verificación detallada de bases de datos y Grafana |
 | `resources` | CPU, RAM, disco y stats de contenedores |

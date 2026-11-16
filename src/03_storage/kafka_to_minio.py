@@ -54,14 +54,14 @@ _stats = {"consumed": 0, "files_written": 0, "errors": 0}
 
 def _signal_handler(sig, frame):
     global _running
-    print("\n[minio-writer] Señal recibida, volcando y deteniendo...")
+    print("\n[rustfs-writer] Señal recibida, volcando y deteniendo...")
     _running = False
 
 
 def _ensure_bucket(client: Minio) -> None:
     if not client.bucket_exists(MINIO_BUCKET):
         client.make_bucket(MINIO_BUCKET)
-        print(f"[minio-writer] Bucket '{MINIO_BUCKET}' creado")
+        print(f"[rustfs-writer] Bucket '{MINIO_BUCKET}' creado")
 
 
 def _hive_path(ts: datetime, filename: str) -> str:
@@ -96,18 +96,18 @@ def _flush(client: Minio, records: list[dict]) -> bool:
         )
         _stats["files_written"] += 1
         print(
-            f"[minio-writer] ✓ {len(records)} registros → "
+            f"[rustfs-writer] ✓ {len(records)} registros → "
             f"s3://{MINIO_BUCKET}/{object_name} ({len(data)/1024:.1f} KB)"
         )
         return True
     except Exception as e:
         _stats["errors"] += 1
-        print(f"[minio-writer] ✗ Error escribiendo en RustFS: {e}")
+        print(f"[rustfs-writer] ✗ Error escribiendo en RustFS: {e}")
         return False
 
 
 def run():
-    print("[minio-writer] Iniciando sensors_clean → RustFS JSON writer")
+    print("[rustfs-writer] Iniciando sensors_clean → RustFS JSON writer")
     print(f"  Kafka : {KAFKA_BROKER}  topic={KAFKA_TOPIC}  group={KAFKA_GROUP}")
     print(f"  RustFS : {MINIO_ENDPOINT}  bucket={MINIO_BUCKET}/{MINIO_PATH}  ventana={WINDOW_SECONDS}s")
     print()
@@ -122,7 +122,7 @@ def run():
         "enable.auto.commit": False,
     })
     consumer.subscribe([KAFKA_TOPIC])
-    print(f"[minio-writer] Suscrito a '{KAFKA_TOPIC}'. Ctrl+C para detener.\n")
+    print(f"[rustfs-writer] Suscrito a '{KAFKA_TOPIC}'. Ctrl+C para detener.\n")
 
     window: list[dict] = []
     window_start = time.monotonic()
@@ -142,10 +142,10 @@ def run():
                     window.append(record)
                     _stats["consumed"] += 1
                     if len(window) % 50 == 0:
-                        print(f"[minio-writer] ← {len(window)} en ventana actual...")
+                        print(f"[rustfs-writer] ← {len(window)} en ventana actual...")
                 except Exception as e:
                     _stats["errors"] += 1
-                    print(f"[minio-writer] ✗ Mensaje inválido: {e}")
+                    print(f"[rustfs-writer] ✗ Mensaje inválido: {e}")
 
             if time.monotonic() - window_start >= WINDOW_SECONDS:
                 if window and _flush(minio_client, window):
@@ -160,7 +160,7 @@ def run():
         if window:
             _flush(minio_client, window)
         consumer.close()
-        print(f"\n[minio-writer] Detenido. Stats: {_stats}")
+        print(f"\n[rustfs-writer] Detenido. Stats: {_stats}")
 
 
 if __name__ == "__main__":

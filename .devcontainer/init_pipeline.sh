@@ -166,18 +166,18 @@ fi
 
 # ── 4. RustFS writer (cold path) ──────────────────────────────
 echo ""
-echo ">>> [4/4] Arrancando minio-writer (cold path)..."
+echo ">>> [4/4] Arrancando rustfs-writer (cold path)..."
 if pgrep -f "kafka_to_minio.py" > /dev/null 2>&1; then
-  echo -e "    ${GREEN}✅ minio-writer ya está corriendo${NC}"
+  echo -e "    ${GREEN}✅ rustfs-writer ya está corriendo${NC}"
 else
   nohup python /workspaces/programacion_IA_PAC_DES/src/03_storage/kafka_to_minio.py \
     > /tmp/minio_writer.log 2>&1 &
   MINIO_PID=$!
   sleep 3
   if kill -0 "${MINIO_PID}" 2>/dev/null; then
-    echo -e "    ${GREEN}✅ minio-writer corriendo (PID ${MINIO_PID}) — log: /tmp/minio_writer.log${NC}"
+    echo -e "    ${GREEN}✅ rustfs-writer corriendo (PID ${MINIO_PID}) — log: /tmp/minio_writer.log${NC}"
   else
-    echo -e "    ${RED}❌ minio-writer se cayó al arrancar — revisa: tail /tmp/minio_writer.log${NC}"
+    echo -e "    ${RED}❌ rustfs-writer se cayó al arrancar — revisa: tail /tmp/minio_writer.log${NC}"
   fi
 fi
 
@@ -265,9 +265,9 @@ print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state'] not in ('CANCELE
 
 alias sim='python src/01_ingestion/sensor_simulator.py --machines 5 --fault-rate 0.1'
 alias bridge='python src/01_ingestion/mqtt_to_redpanda_bridge.py'
-alias minio-writer='python src/03_storage/kafka_to_minio.py'
-alias minio-status='pgrep -fa kafka_to_minio && tail -20 /tmp/minio_writer.log || echo "minio-writer NO está corriendo. Lanza: minio-writer &"'
-alias minio-log='tail -f /tmp/minio_writer.log'
+alias rustfs-writer='python src/03_storage/kafka_to_minio.py'
+alias rustfs-status='pgrep -fa kafka_to_minio && tail -20 /tmp/minio_writer.log || echo "rustfs-writer NO está corriendo. Lanza: rustfs-writer &"'
+alias rustfs-log='tail -f /tmp/minio_writer.log'
 alias api='uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload'
 alias ui='streamlit run src/05_ui/app.py --server.port 8501'
 alias nb='jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --ServerApp.token="" --ServerApp.password="" --NotebookApp.token="" --NotebookApp.password=""'
@@ -288,9 +288,9 @@ alias verify-db='python /workspaces/programacion_IA_PAC_DES/tests/test_databases
 alias aliases='echo "
   sim            → Simulador de sensores (5 máquinas, fault-rate 0.1)
   bridge         → Puente MQTT → Redpanda
-  minio-writer   → Cold path: kafka_to_minio.py (lanzar en background: minio-writer &)
-  minio-status   → Verifica si minio-writer está corriendo + últimas líneas de log
-  minio-log      → Sigue el log de minio-writer en tiempo real
+  rustfs-writer  → Cold path: kafka_to_minio.py (lanzar en background: rustfs-writer &)
+  rustfs-status  → Verifica si rustfs-writer está corriendo + últimas líneas de log
+  rustfs-log     → Sigue el log de rustfs-writer en tiempo real
   api            → FastAPI en :8000
   ui             → Streamlit dashboard en :8501
   nb             → JupyterLab en :8888
@@ -329,5 +329,5 @@ echo    "║  ⚪ Streamlit         → http://localhost:18501       ║"
 echo    "║  ⚪ Jupyter           → http://localhost:18888       ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "    Aliases disponibles: sim | bridge | minio-writer | minio-status | minio-log | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
+echo "    Aliases disponibles: sim | bridge | rustfs-writer | rustfs-status | rustfs-log | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
 echo ""

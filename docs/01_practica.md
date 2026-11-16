@@ -188,7 +188,7 @@ streamlit run src/05_ui/app.py --server.port 8501
 > Si necesitas relanzarlo manualmente:
 > ```bash
 > python src/03_storage/kafka_to_minio.py &
-> # alias: minio-writer
+> # alias: rustfs-writer
 > ```
 
 ### Paso 6 — Entrenar el modelo de IA
@@ -744,7 +744,7 @@ unified = conn.execute("""
 # El proceso arranca automáticamente con init_pipeline.sh
 # Para lanzarlo manualmente:
 python src/03_storage/kafka_to_minio.py &
-# alias: minio-writer
+# alias: rustfs-writer
 
 # Ver el log
 tail -f /tmp/minio_writer.log

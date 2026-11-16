@@ -246,7 +246,7 @@ Cada mensaje lleva un campo `hash` calculado como `SHA256(hash_anterior + payloa
 2. Crea el bucket `datalake` en RustFS.
 3. Lanza los 3 jobs Flink (si no están ya corriendo): normalization, hash_verifier, analytics.
 4. Arranca `kafka_to_minio.py` como proceso Python en background (cold path).
-5. Añade aliases de desarrollo a `~/.bashrc` (`sim`, `bridge`, `api`, `ui`, `flink-jobs`, `minio-writer`, etc.).
+5. Añade aliases de desarrollo a `~/.bashrc` (`sim`, `bridge`, `api`, `ui`, `flink-jobs`, `rustfs-writer`, etc.).
 
 ---
 
@@ -375,7 +375,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**El `minio-writer` usa `consumer.commit()` manual. ¿Qué ocurriría si el proceso se mata justo después de subir un archivo a RustFS pero antes del commit? ¿Y si se mata justo después del commit pero antes de subir?**
+**El `rustfs-writer` usa `consumer.commit()` manual. ¿Qué ocurriría si el proceso se mata justo después de subir un archivo a RustFS pero antes del commit? ¿Y si se mata justo después del commit pero antes de subir?**
 
 ---
 

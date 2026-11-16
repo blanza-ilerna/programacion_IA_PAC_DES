@@ -142,7 +142,7 @@ flink-restart
 
 # 4. Cold path: Kafka → RustFS
 python src/03_storage/kafka_to_minio.py
-# alias: minio-writer
+# alias: rustfs-writer
 
 # 5. FastAPI
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload

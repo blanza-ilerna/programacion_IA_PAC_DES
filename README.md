@@ -88,7 +88,9 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 > archivado en abril de 2026), así que el cold path usa **RustFS** (`rustfs/rustfs:1.0.6`), compatible
 > con la API S3. Para no tocar el código, **se conservan estos nombres**: el servicio/hostname Docker
 > `minio` (`MINIO_ENDPOINT=minio:9000`), las variables `MINIO_*`, el cliente Python `minio` (habla S3,
-> sirve con cualquier servidor compatible), el script `kafka_to_minio.py` y los alias `minio-*`.
+> sirve con cualquier servidor compatible), el script `kafka_to_minio.py`, su log `/tmp/minio_writer.log`
+> y su consumer group de Kafka `py-minio-writer`. Los alias de desarrollo sí se llaman `rustfs-*`
+> (`rustfs-writer`, `rustfs-status`, `rustfs-log`).
 > Comprobar que responde: `python -c "import urllib.request;print(urllib.request.urlopen('http://minio:9000/health').status)"`.
 > La imagen no incluye el cliente `mc`.
 >
@@ -190,12 +192,12 @@ Esto:
 - Crea los **topics Kafka** (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`)
 - Crea el **bucket RustFS** `datalake`
 - Lanza los **3 jobs Flink** (normalización, analytics, hash verifier)
-- Arranca el **minio-writer** (cold path Python)
+- Arranca el **rustfs-writer** (cold path Python)
 - Añade **aliases de desarrollo** al shell (`sim`, `bridge`, `api`, `ui`, `nb`, `flink-list`, ...)
 
 ### 3. Arrancar el pipeline completo
 
-> **Importante:** `init_pipeline.sh` ya arranca el `minio-writer` automáticamente y espera
+> **Importante:** `init_pipeline.sh` ya arranca el `rustfs-writer` automáticamente y espera
 > a que los 3 jobs Flink estén `RUNNING`. **No arranques `sim` hasta que el script confirme
 > que los jobs están listos** — si el simulador arranca antes que el hash verifier,
 > todos los mensajes irán al DLQ y `sensors_verified` quedará vacío.
@@ -223,8 +225,8 @@ mqtt-sub
 # equivale a: mosquitto_sub -h mosquitto -p 1883 -t "sensors/telemetry" -v
 ```
 
-> **minio-writer** ya corre en background (arrancado por `init_pipeline.sh`).
-> Verifica con `minio-status`. Si se cayó, relánzalo con `minio-writer &`.
+> **rustfs-writer** ya corre en background (arrancado por `init_pipeline.sh`).
+> Verifica con `rustfs-status`. Si se cayó, relánzalo con `rustfs-writer &`.
 > Escribe archivos JSON a RustFS cada 60s — espera ~1 min para ver el primer archivo.
 
 En ~30 segundos empezarán a llegar datos a Redpanda y desde ahí Flink los procesará hacia InfluxDB y RustFS.
@@ -312,7 +314,7 @@ flink-restart
 
 ```bash
 # Verificar si está corriendo y arrancarlo si no
-pgrep -f kafka_to_minio && echo "minio-writer OK" || { echo "Arrancando..."; minio-writer & }
+pgrep -f kafka_to_minio && echo "rustfs-writer OK" || { echo "Arrancando..."; rustfs-writer & }
 
 # Seguir el log
 tail -f /tmp/minio_writer.log
