@@ -49,7 +49,7 @@ def compute_hash(msg: dict[str, Any], prev_hash: str) -> str:
     El hash se calcula sobre: JSON(campos_contenido, sort_keys=True) + prev_hash
 
     Args:
-        msg:       Mensaje de sensors_raw con al menos los campos en HASH_FIELDS.
+        msg:       Mensaje de sensors_raw (se excluyen los campos de EXCLUDE_FROM_HASH).
         prev_hash: Hash SHA256 del mensaje anterior (GENESIS_HASH para el primero).
 
     Returns:

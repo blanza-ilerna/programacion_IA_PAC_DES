@@ -5,7 +5,7 @@ Completa en orden: primero infraestructura, luego pipeline.
 
 > **Puertos externos** (los que usa el host/Codespaces):
 > MQTT=11883 · Kafka=19092 · Redpanda Console=18080 · Flink UI=18081
-> InfluxDB=18086 · MinIO S3=19000 · MinIO UI=19001 · Grafana=13000
+> InfluxDB=18086 · RustFS S3=19000 · RustFS UI=19001 · S3 Web=19002 · Grafana=13000
 > FastAPI=18000 · Streamlit=18501 · Jupyter=18888
 
 ---
@@ -35,7 +35,8 @@ Comprobar que están **Up** (healthy donde aplica):
 - [ ] `jobmanager` — Up, **healthy**
 - [ ] `taskmanager` — Up
 - [ ] `influxdb` — Up, **healthy**
-- [ ] `minio` — Up, **healthy**
+- [ ] `minio` (RustFS) — Up (sin healthcheck: es normal que no ponga *healthy*)
+- [ ] `s3web` (cliente web S3) — Up (lo lanza `init_pipeline.sh`; opcional)
 - [ ] `grafana` — Up
 
 Si alguno está `Exited` o `unhealthy`:
@@ -65,8 +66,12 @@ En Codespaces: pestaña **Ports** → abrir cada puerto en el navegador.
 - [ ] **Redpanda Console** (18080) — se carga la lista de tópicos
 - [ ] **Flink UI** (18081) — se ve el Overview y al menos 1 TaskManager registrado
 - [ ] **InfluxDB** (18086) — pantalla de login, entrar con `admin` / `Ilerna_Programaci0n`
-- [ ] **MinIO Console** (19001) — pantalla de login, entrar con `admin` / `Ilerna_Programaci0n`
-- [ ] **Grafana** (13000) — pantalla de login, entrar con `admin` / `Ilerna_Programaci0n`
+- [ ] **RustFS Console** (19001) — pantalla de login, `admin` / `Ilerna_Programaci0n`. En Codespaces el login
+      puede fallar (`SignatureDoesNotMatch` por el proxy de puertos): no es bloqueante.
+- [ ] **S3 Web** (19002) — se ve el bucket `datalake` (solo lectura). Si no carga: `s3web status`
+- [ ] **Grafana** (13000) — entra sin login (acceso anónimo; admin: `admin` / `Ilerna_Programaci0n`).
+      Dashboards *Telemetría IoT* y *Redpanda / Kafka* con datos. Si algún panel falla:
+      `python tests/check_grafana_panels.py`
 
 ---
 
@@ -219,7 +224,7 @@ curl -s -H "Authorization: Token supersecrettoken" \
 
 ---
 
-## Fase 8 — MinIO (S3)
+## Fase 8 — RustFS (S3)
 
 ### Verificar health
 ```bash
@@ -257,9 +262,9 @@ python tests/test_flow.py
 - [ ] Redpanda consume ✅
 - [ ] InfluxDB write ✅
 - [ ] InfluxDB query ✅
-- [ ] MinIO bucket ✅
-- [ ] MinIO put object ✅
-- [ ] MinIO list objects ✅
+- [ ] RustFS bucket ✅
+- [ ] RustFS put object ✅
+- [ ] RustFS list objects ✅
 - [ ] Grafana health ✅
 - [ ] Salida: `Todos los tests pasaron (N/N)` ✅
 
@@ -288,7 +293,7 @@ docker exec $JM flink run -py /opt/flink/jobs/flink_normalization_job.py &
 docker exec $JM flink run -py /opt/flink/jobs/flink_analytics_job.py &
 
 # (kafka_to_minio.py ya arrancó automáticamente con init_pipeline.sh)
-# Si necesitas relanzarlo: python src/03_storage/kafka_to_minio.py &  (alias: minio-writer)
+# Si necesitas relanzarlo: python src/03_storage/kafka_to_minio.py &  (alias: rustfs-writer)
 
 # 6. FastAPI — Hito 4 (Terminal 3) — alias: api
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -381,12 +386,12 @@ done
 
 ```bash
 # Esperar ~60 s para que kafka_to_minio.py emita el primer archivo NDJSON
-# Verificar objetos en MinIO:
+# Verificar objetos en RustFS:
 python3 -c "
 from minio import Minio
 c = Minio('minio:9000', access_key='admin', secret_key='Ilerna_Programaci0n', secure=False)
 objs = list(c.list_objects('datalake', prefix='clean/', recursive=True))
-print(f'Archivos NDJSON en MinIO: {len(objs)}')
+print(f'Archivos NDJSON en RustFS: {len(objs)}')
 for o in objs[:5]:
     print(' ', o.object_name, f'({(o.size or 0)/1024:.1f} KB)')
 "
@@ -460,7 +465,7 @@ Marca solo si **todo lo anterior** está completado:
 
 **Aportaciones avanzadas:**
 - [ ] A1 — Hash-Chain: `sensors_verified` recibe mensajes íntegros, `sensors_invalid` detecta cadena rota
-- [ ] A2 — Lambda Cold Path: MinIO `datalake/clean/` contiene NDJSON particionado (Hive), DuckDB puede consultarlo con `read_json()`
+- [ ] A2 — Lambda Cold Path: RustFS `datalake/clean/` contiene NDJSON particionado (Hive), DuckDB puede consultarlo con `read_json()`
 - [ ] A3 — IsolationForest: modelo entrenado, predicción devuelve `failure_prob` y `interpretation`
 
 ---
@@ -488,7 +493,7 @@ jupyter nbconvert --to notebook --execute notebooks/01_exploracion_datos.ipynb \
 ```
 
 - [ ] Sección 2 — InfluxDB: `df_hot` tiene registros, gráfica de temperatura visible ✅
-- [ ] Sección 3 — MinIO: DuckDB conecta a `minio:9000` y lee NDJSON sin error ✅
+- [ ] Sección 3 — RustFS: DuckDB conecta a `minio:9000` y lee NDJSON sin error ✅
 - [ ] Sección 4 — Lambda Query: `df_unified` contiene filas de al menos una fuente ✅
 - [ ] Sección 5 — IsolationForest: `/model/train` responde `trained: true` ✅
 - [ ] Sección 5 — Predicción 70°C: `is_anomaly: false` ✅

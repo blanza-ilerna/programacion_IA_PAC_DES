@@ -50,7 +50,7 @@
     "cpus": 4,
     "memory": "16gb"
   },
-  "postCreateCommand": "pip install --upgrade pip && pip install -r config/requirements.txt && chmod +x .devcontainer/start.sh .devcontainer/init_pipeline.sh && python3 -c \"import duckdb; duckdb.connect().execute('INSTALL httpfs')\" 2>/dev/null || true",
+  "postCreateCommand": "pip install --upgrade pip && pip install -r config/requirements.txt && chmod +x .devcontainer/start.sh .devcontainer/init_pipeline.sh && python3 -c \"import duckdb; duckdb.connect().execute('INSTALL httpfs')\" 2>/dev/null || true; bash .devcontainer/setup_s3_cli.sh || true",
   "postStartCommand": "bash .devcontainer/start.sh",
   "forwardPorts": [
     11883,
@@ -60,6 +60,7 @@
     18086,
     19000,
     19001,
+    19002,
     18000,
     18501,
     13000,
@@ -91,7 +92,11 @@
       "onAutoForward": "silent"
     },
     "19001": {
-      "label": "MinIO Console (Data Lake UI)",
+      "label": "RustFS Console (Data Lake UI)",
+      "onAutoForward": "silent"
+    },
+    "19002": {
+      "label": "S3 Web - s3manager (solo lectura)",
       "onAutoForward": "silent"
     },
     "18086": {
@@ -107,7 +112,7 @@
       "onAutoForward": "ignore"
     },
     "19000": {
-      "label": "MinIO (S3 API)",
+      "label": "RustFS (S3 API)",
       "onAutoForward": "ignore"
     }
   }

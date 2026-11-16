@@ -10,7 +10,7 @@ Preguntas y respuestas organizadas por bloque temático, cubriendo los conceptos
 
 La Arquitectura Lambda combina dos paths de procesamiento:
 - **Hot path** (baja latencia): Flink → InfluxDB → consultas en segundos. Sirve para monitorización en tiempo real y alertas.
-- **Cold path** (alta escala): Flink/Python → MinIO JSON → consultas históricas. Sirve para análisis mensual y entrenamiento ML.
+- **Cold path** (alta escala): Flink/Python → RustFS JSON → consultas históricas. Sirve para análisis mensual y entrenamiento ML.
 - **Serving layer**: DuckDB ejecuta un `UNION ALL` en memoria combinando ambas fuentes sin mover datos.
 
 ---
@@ -116,7 +116,7 @@ Es un bug conocido del Beam runner de PyFlink 1.18: las métricas de registros d
 
 ---
 
-## 5. Almacenamiento (InfluxDB y MinIO)
+## 5. Almacenamiento (InfluxDB y RustFS)
 
 **¿Por qué se usa InfluxDB y no una base de datos relacional para el hot path?**
 
@@ -137,7 +137,7 @@ machine_stats,device_id=machine-001 avg_temp_c=72.3,alert=0i 1710768000000000000
 
 ---
 
-**¿Qué es el particionado Hive en MinIO y para qué sirve?**
+**¿Qué es el particionado Hive en RustFS y para qué sirve?**
 
 Organizar los ficheros en directorios con nombre `columna=valor`:
 ```
@@ -149,7 +149,7 @@ DuckDB (y herramientas como Spark, Athena) pueden leer solo las particiones nece
 
 **¿Por qué se eligió `kafka_to_minio.py` (Python) en lugar de un job Flink para el cold path?**
 
-El conector FileSystem de Flink + plugin S3/Hadoop requiere JARs de Hadoop que presentaban conflictos de classpath en el entorno (Flink 1.18 + Java 17). El proceso Python alternativo (`kafka_to_minio.py`) consume `sensors_clean` directamente con `confluent_kafka`, acumula mensajes en ventanas de 60s y los escribe en MinIO como NDJSON con particionado Hive. DuckDB los lee con `read_json()` y `hive_partitioning=true`, obteniendo exactamente el mismo resultado funcional.
+El conector FileSystem de Flink + plugin S3/Hadoop requiere JARs de Hadoop que presentaban conflictos de classpath en el entorno (Flink 1.18 + Java 17). El proceso Python alternativo (`kafka_to_minio.py`) consume `sensors_clean` directamente con `confluent_kafka`, acumula mensajes en ventanas de 60s y los escribe en RustFS como NDJSON con particionado Hive. DuckDB los lee con `read_json()` y `hive_partitioning=true`, obteniendo exactamente el mismo resultado funcional.
 
 **¿Por qué se eligió NDJSON en lugar de Parquet para el cold path Python?**
 
@@ -210,7 +210,7 @@ La fracción esperada de anomalías en el conjunto de entrenamiento. Con `contam
 
 **¿Qué es DuckDB y qué rol tiene en la Arquitectura Lambda?**
 
-DuckDB es un motor SQL analítico embebido (sin servidor). En este proyecto actúa como capa de consulta unificada: ejecuta un `UNION ALL` entre datos de InfluxDB (hot) y MinIO (cold) en memoria, sin necesidad de copiar datos a ningún lado. Usa la extensión `httpfs` para leer ficheros JSON directamente desde MinIO via S3.
+DuckDB es un motor SQL analítico embebido (sin servidor). En este proyecto actúa como capa de consulta unificada: ejecuta un `UNION ALL` entre datos de InfluxDB (hot) y RustFS (cold) en memoria, sin necesidad de copiar datos a ningún lado. Usa la extensión `httpfs` para leer ficheros JSON directamente desde RustFS via S3.
 
 ---
 
@@ -242,12 +242,12 @@ Cada mensaje lleva un campo `hash` calculado como `SHA256(hash_anterior + payloa
 
 **¿Qué hace `init_pipeline.sh` al ejecutarlo?**
 
-1. Crea los 4 topics Kafka en Redpanda (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`).
-2. Crea el bucket `datalake` en MinIO.
-3. Configura el alias `mc` para comandos MinIO.
-4. Lanza los 3 jobs Flink (si no están ya corriendo): normalization, hash_verifier, analytics.
-5. Arranca `kafka_to_minio.py` como proceso Python en background (cold path).
-6. Añade aliases de desarrollo a `~/.bashrc` (`sim`, `bridge`, `api`, `ui`, `flink-jobs`, `minio-writer`, etc.).
+1. Recrea los 4 topics Kafka en Redpanda (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`): borra y crea, así que **purga los mensajes** y reinicia la hash-chain.
+2. Crea el bucket `datalake` en RustFS.
+3. Lanza los 3 jobs Flink (si no están ya corriendo): normalization, hash_verifier, analytics.
+4. Arranca `kafka_to_minio.py` como proceso Python en background (cold path).
+5. Prepara las herramientas S3 opcionales (AWS CLI con la función `s3` y el cliente web s3manager en :19002). Si fallan, solo avisan.
+6. Añade aliases de desarrollo a `~/.bashrc` (`sim`, `bridge`, `api`, `ui`, `flink-jobs`, `rustfs-writer`, etc.).
 
 ---
 
@@ -269,8 +269,9 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 | 18086 | InfluxDB | Base de datos de series temporales |
 | 18501 | Streamlit | Dashboard interactivo |
 | 18888 | JupyterLab | Notebooks de análisis |
-| 19000 | MinIO S3 API | Acceso programático al datalake |
-| 19001 | MinIO Console | UI web de MinIO |
+| 19000 | RustFS S3 API | Acceso programático al datalake |
+| 19001 | RustFS Console | UI web de RustFS (el login puede fallar en Codespaces) |
+| 19002 | S3 Web (s3manager) | Navegar el bucket `datalake`, solo lectura |
 | 19092 | Redpanda Kafka API | Producers/consumers Kafka |
 
 ---
@@ -339,7 +340,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Qué es `partition pruning` en DuckDB y cómo lo habilita el particionado Hive de MinIO? ¿Qué columnas de la query deben coincidir para aprovecharlo?**
+**¿Qué es `partition pruning` en DuckDB y cómo lo habilita el particionado Hive de RustFS? ¿Qué columnas de la query deben coincidir para aprovecharlo?**
 
 ---
 
@@ -351,7 +352,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Por qué `kafka_to_minio.py` hace commit de offsets solo tras una escritura exitosa en MinIO y no automáticamente? ¿Qué problema evita?**
+**¿Por qué `kafka_to_minio.py` hace commit de offsets solo tras una escritura exitosa en RustFS y no automáticamente? ¿Qué problema evita?**
 
 ---
 
@@ -368,7 +369,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Cómo verificarías desde la línea de comandos que `kafka_to_minio.py` está corriendo, cuántos archivos ha escrito en MinIO y qué decía su última línea de log? Escribe los tres comandos.**
+**¿Cómo verificarías desde la línea de comandos que `kafka_to_minio.py` está corriendo, cuántos archivos ha escrito en RustFS y qué decía su última línea de log? Escribe los tres comandos.**
 
 ---
 
@@ -376,7 +377,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**El `minio-writer` usa `consumer.commit()` manual. ¿Qué ocurriría si el proceso se mata justo después de subir un archivo a MinIO pero antes del commit? ¿Y si se mata justo después del commit pero antes de subir?**
+**El `rustfs-writer` usa `consumer.commit()` manual. ¿Qué ocurriría si el proceso se mata justo después de subir un archivo a RustFS pero antes del commit? ¿Y si se mata justo después del commit pero antes de subir?**
 
 ---
 
@@ -480,7 +481,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Qué es `enable.auto.commit: False` en `kafka_to_minio.py` y por qué es importante para la consistencia entre Kafka y MinIO?**
+**¿Qué es `enable.auto.commit: False` en `kafka_to_minio.py` y por qué es importante para la consistencia entre Kafka y RustFS?**
 
 ---
 
@@ -506,7 +507,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Por qué el hot path usa InfluxDB y no MinIO? ¿Qué características de InfluxDB lo hacen adecuado para datos en tiempo real?**
+**¿Por qué el hot path usa InfluxDB y no RustFS? ¿Qué características de InfluxDB lo hacen adecuado para datos en tiempo real?**
 
 ---
 
@@ -522,7 +523,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Por qué en el cold path se usan ventanas de 60 segundos para escribir en MinIO en lugar de escribir registro a registro?**
+**¿Por qué en el cold path se usan ventanas de 60 segundos para escribir en RustFS en lugar de escribir registro a registro?**
 
 ---
 
@@ -570,7 +571,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ## Conceptos generales de almacenamiento y consulta
 
-**¿Qué es un object store (MinIO/S3) y en qué se diferencia de un sistema de ficheros tradicional?**
+**¿Qué es un object store (RustFS/S3) y en qué se diferencia de un sistema de ficheros tradicional?**
 
 ---
 
@@ -578,7 +579,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Qué es el `bucket` en InfluxDB y en MinIO? ¿Son el mismo concepto?**
+**¿Qué es el `bucket` en InfluxDB y en RustFS? ¿Son el mismo concepto?**
 
 ---
 
@@ -608,7 +609,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**¿Qué es un volumen Docker y por qué los datos de InfluxDB y MinIO se guardan en volúmenes en lugar de en el sistema de ficheros del contenedor?**
+**¿Qué es un volumen Docker y por qué los datos de InfluxDB y RustFS se guardan en volúmenes en lugar de en el sistema de ficheros del contenedor?**
 
 ---
 
@@ -640,7 +641,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**La sección 5 del notebook 01 hace `UNION ALL` entre hot_df (InfluxDB) y cold_df (MinIO) con DuckDB. ¿Qué ocurre con los registros que están en ambas fuentes a la vez (solapamiento temporal)? ¿Se duplican?**
+**La sección 5 del notebook 01 hace `UNION ALL` entre hot_df (InfluxDB) y cold_df (RustFS) con DuckDB. ¿Qué ocurre con los registros que están en ambas fuentes a la vez (solapamiento temporal)? ¿Se duplican?**
 
 ---
 
@@ -680,7 +681,7 @@ Codespaces de 2 cores / 8GB RAM ejecuta simultáneamente: jobmanager (560MB), ta
 
 ---
 
-**La sección 3 del notebook 03 inventaría los archivos NDJSON en MinIO con DuckDB. Si hay 10 archivos de 60 segundos cada uno, ¿cuántos minutos de datos históricos cubre el cold path aproximadamente?**
+**La sección 3 del notebook 03 inventaría los archivos NDJSON en RustFS con DuckDB. Si hay 10 archivos de 60 segundos cada uno, ¿cuántos minutos de datos históricos cubre el cold path aproximadamente?**
 
 ---
 

@@ -4,7 +4,7 @@ test_databases.py — Verificación de datos en bases de datos y Grafana.
 Comprueba:
   1. Redpanda  — mensajes en cada topic del pipeline
   2. InfluxDB  — datos recientes en machine_stats (últimos 30 min y 3 h)
-  3. MinIO     — archivos JSON en el datalake (cold path)
+  3. RustFS     — archivos JSON en el datalake (cold path)
   4. Grafana   — datasource health + queries de paneles del dashboard
 
 Uso:
@@ -210,9 +210,9 @@ def test_influxdb():
         ok("Sin alertas activas", "todas las máquinas por debajo de 80°C")
 
 
-# ── 3. MinIO ──────────────────────────────────────────────────
+# ── 3. RustFS ──────────────────────────────────────────────────
 def test_minio():
-    section("MinIO — Cold Path (datalake)")
+    section("RustFS — Cold Path (datalake)")
     try:
         from minio import Minio
         client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=False)
@@ -245,9 +245,9 @@ def test_minio():
                 print(f"    (hay {len(objs)} objeto(s) en el bucket, ninguno .json aún)")
 
     except ImportError:
-        fail("MinIO", "minio no instalado — pip install minio")
+        fail("RustFS", "minio no instalado — pip install minio")
     except Exception as e:
-        fail("MinIO", str(e))
+        fail("RustFS", str(e))
 
 
 # ── 4. Grafana ────────────────────────────────────────────────
@@ -348,7 +348,11 @@ def test_grafana():
             # Extraer valor si existe
             val = "sin valor"
             try:
-                val = res["results"]["A"]["frames"][0]["data"]["values"][-1][0]
+                frame = frames[0]
+                names = [f.get("name") for f in frame["schema"]["fields"]]
+                # La columna de valor no siempre es la última (max() conserva device_id)
+                idx = names.index("_value") if "_value" in names else len(names) - 1
+                val = frame["data"]["values"][idx][0]
                 val = f"valor={val:.2f}" if isinstance(val, float) else f"valor={val}"
             except Exception:
                 pass

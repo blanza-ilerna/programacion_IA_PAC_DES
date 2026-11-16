@@ -66,7 +66,7 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
                               · DuckDB lee con read_json + hive_partitioning=true
                                       │
                                       ▼
-                              [MinIO]  :19000/:19001  bucket=datalake
+                              [S3: RustFS]  :19000/:19001  bucket=datalake
 ```
 
 ## Servicios Docker
@@ -81,8 +81,33 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 | InfluxDB         | 18086          | Base de datos de series temp.  | admin / Ilerna_Programaci0n |
 | Streamlit        | 18501          | Dashboard interactivo          | —                           |
 | JupyterLab       | 18888          | Notebooks de análisis          | —                           |
-| MinIO            | 19000 / 19001  | S3 API / Consola web           | admin / Ilerna_Programaci0n |
+| RustFS (S3)      | 19000 / 19001  | S3 API / Consola web (host `minio`) | admin / Ilerna_Programaci0n |
+| S3 Web (s3manager) | 19002        | Navegador del bucket, solo lectura (lo lanza `init_pipeline.sh`) | — |
 | Redpanda         | 19092          | Kafka-compatible broker        | —                           |
+
+> **Nota sobre el almacenamiento S3.** MinIO dejó de publicar imágenes oficiales (repositorio
+> archivado en abril de 2026), así que el cold path usa **RustFS** (`rustfs/rustfs:1.0.6`), compatible
+> con la API S3. Para no tocar el código, **se conservan estos nombres**: el servicio/hostname Docker
+> `minio` (`MINIO_ENDPOINT=minio:9000`), las variables `MINIO_*`, el cliente Python `minio` (habla S3,
+> sirve con cualquier servidor compatible), el script `kafka_to_minio.py`, su log `/tmp/minio_writer.log`
+> y su consumer group de Kafka `py-minio-writer`. Los alias de desarrollo sí se llaman `rustfs-*`
+> (`rustfs-writer`, `rustfs-status`, `rustfs-log`).
+> Comprobar que responde: `python -c "import urllib.request;print(urllib.request.urlopen('http://minio:9000/health').status)"`.
+> La imagen no incluye el cliente `mc`.
+>
+> **Consola web (:19001).** Exige login (`admin` / `Ilerna_Programaci0n`; no existe modo anónimo). En
+> Codespaces el login puede fallar con `SignatureDoesNotMatch` por el proxy de puertos. Alternativas
+> (las prepara `init_pipeline.sh`; si alguna falla solo avisa, no bloquea nada):
+>
+> | Herramienta | Cómo | Para qué |
+> |---|---|---|
+> | **Cliente web S3** (s3manager) | puerto **19002** en la pestaña Ports · `s3web start\|stop\|status` | Navegar buckets y descargar archivos. **Solo lectura**. Firma desde el servidor, así que no le afecta el proxy |
+> | **AWS CLI** (perfil `rustfs`) | `s3 ls s3://datalake/ --recursive --human-readable` · `s3 cp s3://datalake/<clave> -` | Terminal: listar, ver contenido, descargar |
+> | **Script Python** | `python tests/list_datalake.py [--preview]` | Resumen de objetos, tamaños y particiones por hora |
+>
+> El AWS CLI se instala como binario en `~/.local` (no toca los paquetes Python del proyecto) mediante
+> `.devcontainer/setup_s3_cli.sh`, y s3manager se lanza con `docker run` desde `.devcontainer/s3web.sh`
+> (no está en el compose: si su imagen fallara, el Codespace seguiría arrancando).
 
 ## Estructura del proyecto
 
@@ -94,7 +119,9 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │   ├── Dockerfile.jobmanager       # Imagen Flink con JARs Kafka/InfluxDB y PyFlink
 │   ├── devcontainer.json           # Configuración GitHub Codespaces
 │   ├── start.sh                    # postStartCommand: levanta Docker y espera healthy
-│   └── init_pipeline.sh            # MANUAL: topics, bucket MinIO, jobs Flink, aliases
+│   ├── init_pipeline.sh            # MANUAL: topics, bucket RustFS, jobs Flink, herramientas S3, aliases
+│   ├── setup_s3_cli.sh             # AWS CLI v2 + perfil "rustfs" + función `s3` (no bloqueante)
+│   └── s3web.sh                    # Cliente web S3 s3manager en :19002 (docker run, no bloqueante)
 │
 ├── src/
 │   ├── 01_ingestion/
@@ -105,13 +132,17 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │   │   ├── transformations.py          # UDF to_celsius (F/K → °C)
 │   │   └── validators.py               # Validación de schema de mensajes
 │   ├── 03_storage/
-│   │   ├── kafka_to_minio.py           # Cold path: sensors_clean → MinIO NDJSON (60s ventana)
-│   │   └── kafka_to_influx.py          # Alternativa directa Kafka → InfluxDB (no en uso)
+│   │   └── kafka_to_minio.py           # Cold path: sensors_clean → RustFS NDJSON (60s ventana)
 │   ├── api/
 │   │   ├── main.py                     # Hito 4: FastAPI REST (/machines, /alerts, /stats)
 │   │   └── anomaly_model.py            # IsolationForest: train + predict
-│   └── 05_ui/
-│       └── app.py                      # Hito 4: Streamlit + DuckDB Lambda Query hot+cold
+│   └── 05_ui/                          # Hito 4: Streamlit + DuckDB Lambda Query hot+cold
+│       ├── app.py                      # Punto de entrada: página, sidebar y reparto de pestañas
+│       ├── settings.py                 # Configuración (variables de entorno)
+│       ├── datasources.py              # Acceso a datos: InfluxDB, RustFS/DuckDB, Flink, Kafka
+│       └── views/                      # Una pestaña por módulo (cada una expone render())
+│           ├── realtime.py  history.py  alerts.py  lambda_query.py  ai_anomalies.py
+│           └── pipeline_health.py  hash_security.py  advanced_models.py  ayuda.py
 │
 ├── jobs/
 │   ├── flink_normalization_job.py      # Hito 2: Table API + UDF + StatementSet (2 sinks)
@@ -132,14 +163,18 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │           │   └── datasources.yml     # InfluxDB (Flux) + Infinity (HTTP genérico)
 │           └── dashboards/
 │               ├── provider.yml
-│               └── redpanda.json       # Dashboard Redpanda/Kafka (brokers, topics, watermarks)
+│               ├── telemetria.json     # Dashboard Telemetría IoT (InfluxDB: temperatura, alertas, throughput)
+│               └── redpanda.json       # Dashboard Redpanda/Kafka (brokers, salud, mensajes por topic)
 │
 ├── tests/
 │   ├── test_connectivity.sh            # Smoke test: ¿responden todos los servicios?
 │   ├── test_flow.py                    # Test E2E: publica mensaje y verifica en cada capa
-│   ├── test_processing.py              # Tests unitarios de transformations y validators
-│   ├── test_databases.py               # Verifica InfluxDB, MinIO y DuckDB query
-│   └── verify_pipeline.sh              # Diagnóstico completo del pipeline en ejecución
+│   ├── test_processing.py              # Tests unitarios (pytest): transformations, validators, hash_chain
+│   ├── test_databases.py               # Verifica InfluxDB, RustFS y DuckDB query
+│   ├── verify_pipeline.sh              # Diagnóstico completo del pipeline en ejecución
+│   ├── check_grafana_endpoints.py      # Endpoints/campos que usan los dashboards de Grafana y si responden
+│   ├── check_grafana_panels.py         # Ejecuta cada panel de Grafana por /api/ds/query y muestra su error real
+│   └── list_datalake.py                # Lista el bucket S3 (objetos, tamaños, particiones) sin consola web
 │
 └── docs/
     ├── 00_smoke_test_checklist.md      # Checklist de validación paso a paso
@@ -157,7 +192,7 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 
 El entorno arranca automáticamente. `start.sh` levanta todos los contenedores Docker (incluido **Mosquitto**) y espera a que estén healthy. Puede tardar 2-3 minutos.
 
-FastAPI y Streamlit también arrancan automáticamente dentro del contenedor `workspace`.
+FastAPI y Streamlit **no** arrancan solos: se lanzan con los alias `api` y `ui` (paso 3).
 
 ### 2. Inicializar el pipeline (una vez por Codespace)
 
@@ -169,14 +204,19 @@ source .devcontainer/init_pipeline.sh
 
 Esto:
 - Crea los **topics Kafka** (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`)
-- Crea el **bucket MinIO** `datalake`
+- Crea el **bucket RustFS** `datalake`
 - Lanza los **3 jobs Flink** (normalización, analytics, hash verifier)
-- Arranca el **minio-writer** (cold path Python)
+- Arranca el **rustfs-writer** (cold path Python)
+- Prepara las **herramientas S3** opcionales: AWS CLI con la función `s3` y el cliente web en el puerto 19002
+  (si alguna falla, solo avisa)
 - Añade **aliases de desarrollo** al shell (`sim`, `bridge`, `api`, `ui`, `nb`, `flink-list`, ...)
 
 ### 3. Arrancar el pipeline completo
 
-> **Importante:** `init_pipeline.sh` ya arranca el `minio-writer` automáticamente y espera
+> **Importante:** `init_pipeline.sh` **purga y recrea los topics** cada vez que se ejecuta (se pierden
+> los mensajes y se reinicia la hash-chain). Ejecútalo una vez por sesión.
+>
+> `init_pipeline.sh` ya arranca el `rustfs-writer` automáticamente y espera
 > a que los 3 jobs Flink estén `RUNNING`. **No arranques `sim` hasta que el script confirme
 > que los jobs están listos** — si el simulador arranca antes que el hash verifier,
 > todos los mensajes irán al DLQ y `sensors_verified` quedará vacío.
@@ -204,11 +244,11 @@ mqtt-sub
 # equivale a: mosquitto_sub -h mosquitto -p 1883 -t "sensors/telemetry" -v
 ```
 
-> **minio-writer** ya corre en background (arrancado por `init_pipeline.sh`).
-> Verifica con `minio-status`. Si se cayó, relánzalo con `minio-writer &`.
-> Escribe archivos JSON a MinIO cada 60s — espera ~1 min para ver el primer archivo.
+> **rustfs-writer** ya corre en background (arrancado por `init_pipeline.sh`).
+> Verifica con `rustfs-status`. Si se cayó, relánzalo con `rustfs-writer &`.
+> Escribe archivos JSON a RustFS cada 60s — espera ~1 min para ver el primer archivo.
 
-En ~30 segundos empezarán a llegar datos a Redpanda y desde ahí Flink los procesará hacia InfluxDB y MinIO.
+En ~30 segundos empezarán a llegar datos a Redpanda y desde ahí Flink los procesará hacia InfluxDB y RustFS.
 
 ### 4. Verificar estado del pipeline
 
@@ -226,6 +266,13 @@ bash tests/verify_pipeline.sh      # alias: verify
 
 # 4. Diagnóstico detallado de BBDDs y Grafana (si hay dudas)
 python tests/test_databases.py     # alias: verify-db
+
+# 5. Grafana: ¿responde cada panel? ¿están los endpoints que usan?
+python tests/check_grafana_panels.py
+python tests/check_grafana_endpoints.py
+
+# 6. Cold path: ¿qué hay en el bucket?
+python tests/list_datalake.py --preview      # o: s3 ls s3://datalake/ --recursive
 ```
 
 ### 5. Entrenar el modelo de anomalías (primera vez)
@@ -251,7 +298,8 @@ Desde la pestaña **Ports** de Codespaces:
 | Redpanda Console  | 18080  | Topics Kafka y mensajes        |
 | JupyterLab        | 18888  | Notebooks de análisis          |
 | InfluxDB          | 18086  | Series temporales (hot path)   |
-| MinIO Console     | 19001  | Archivos NDJSON (cold path)    |
+| Consola S3 (RustFS) | 19001 | Consola RustFS (el login puede fallar en Codespaces) |
+| S3 Web (s3manager)  | 19002 | Navegar el bucket `datalake` (solo lectura) |
 
 ### 7. JupyterLab (análisis ad-hoc)
 
@@ -260,7 +308,7 @@ nb
 # Abrir: notebooks/01_exploracion_datos.ipynb
 ```
 
-El notebook cubre: hot path (InfluxDB), cold path (MinIO NDJSON vía DuckDB), Lambda Query (UNION ALL), entrenamiento IsolationForest y verificación de hash-chain.
+El notebook cubre: hot path (InfluxDB), cold path (RustFS NDJSON vía DuckDB), Lambda Query (UNION ALL), entrenamiento IsolationForest y verificación de hash-chain.
 
 ## Resolución de problemas
 
@@ -287,13 +335,35 @@ flink-restart
 1. Verifica que `sim` y `bridge` están corriendo: `ps aux | grep -E "simulator|bridge"`
 2. Verifica topics con mensajes en Redpanda Console (puerto 18080)
 3. Verifica que los 3 jobs Flink están `RUNNING`: `flink-jobs`
-4. Los dashboards usan rango `-3h` — espera al menos 1 minuto tras reiniciar los jobs
+4. El dashboard *Telemetría IoT* usa rango de 30 min y cada punto es una ventana de 1 min: tras reiniciar
+   los jobs espera 2-3 minutos.
+5. Para ver el error real de cada panel sin pasar el ratón por encima:
+   `python tests/check_grafana_panels.py` (y `python tests/check_grafana_endpoints.py` para los endpoints).
+6. Si cambias `config/grafana/provisioning/datasources/datasources.yml` (p. ej. `allowedHosts` de
+   Infinity), **reinicia Grafana**: los datasources solo se leen al arrancar (los dashboards se recargan
+   solos cada 30 s):
+   `docker restart $(docker ps -qf label=com.docker.compose.service=grafana)`
 
-### Sin datos en MinIO (cold path)
+### El Codespace arranca en "modo recuperación"
+
+Abre el log de creación del Codespace y busca el **primer** `Error pull` (los `Interrupted` y
+`No such image` de las demás imágenes son consecuencia: Compose cancela el resto cuando uno falla).
+Fue lo que pasó con `minio/minio:latest` (imagen retirada) y por eso se cambió a RustFS con versión fija.
+Tras corregir el `docker-compose.yml`: `git pull` y *Codespaces: Rebuild Container*.
+
+### La consola de RustFS (:19001) no deja iniciar sesión
+
+Si el log de `minio` muestra `SignatureDoesNotMatch` con la contraseña correcta, el problema es la firma
+de la petición tras el proxy de puertos de Codespaces, no la contraseña. No es bloqueante; usa:
+
+- el cliente web **s3manager** en el puerto **19002** (`s3web status` / `s3web start`), o
+- la terminal: `s3 ls s3://datalake/ --recursive` o `python tests/list_datalake.py --preview`.
+
+### Sin datos en RustFS (cold path)
 
 ```bash
 # Verificar si está corriendo y arrancarlo si no
-pgrep -f kafka_to_minio && echo "minio-writer OK" || { echo "Arrancando..."; minio-writer & }
+pgrep -f kafka_to_minio && echo "rustfs-writer OK" || { echo "Arrancando..."; rustfs-writer & }
 
 # Seguir el log
 tail -f /tmp/minio_writer.log
@@ -301,7 +371,7 @@ tail -f /tmp/minio_writer.log
 
 Los archivos JSON aparecen en `datalake/clean/year=.../month=.../day=.../hour=.../` cada 60 segundos.
 
-**Verificar objetos en MinIO y que DuckDB los lee correctamente:**
+**Verificar objetos en RustFS y que DuckDB los lee correctamente:**
 
 ```bash
 python3 -c "
@@ -433,7 +503,7 @@ c.close()
 
 | Script                  | Entrada       | Salida                      | Descripción                                 |
 |-------------------------|---------------|-----------------------------|---------------------------------------------|
-| kafka_to_minio.py       | sensors_clean | MinIO datalake/clean/       | NDJSON particionado Hive, ventana 60s       |
+| kafka_to_minio.py       | sensors_clean | RustFS datalake/clean/       | NDJSON particionado Hive, ventana 60s       |
 
 ## Variables de entorno principales
 
@@ -447,6 +517,6 @@ Sobrescribir con variables de entorno si se ejecutan fuera del devcontainer.
 | `KAFKA_BROKER`    | `redpanda:29092`            | Bootstrap servers Kafka          |
 | `INFLUX_URL`      | `http://influxdb:8086`      | URL InfluxDB                     |
 | `INFLUX_TOKEN`    | `supersecrettoken`          | Token de autenticación InfluxDB  |
-| `MINIO_ENDPOINT`  | `minio:9000`                | Endpoint MinIO S3                |
+| `MINIO_ENDPOINT`  | `minio:9000`                | Endpoint RustFS S3                |
 | `ALERT_THRESHOLD` | `80.0`                      | Temperatura de alerta (°C)       |
-| `MINIO_BUCKET`    | `datalake`                  | Bucket MinIO para histórico      |
+| `MINIO_BUCKET`    | `datalake`                  | Bucket RustFS para histórico      |

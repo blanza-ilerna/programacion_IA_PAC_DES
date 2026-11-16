@@ -147,8 +147,10 @@ INFLUX_CSV=$(curl -s --max-time 5 \
 if [[ -z "$INFLUX_CSV" ]]; then
     fail "InfluxDB query" "sin respuesta"
 else
-    ROWS=$(echo "$INFLUX_CSV" | grep -c "^,result" 2>/dev/null || echo 0)
-    if [[ "$ROWS" -gt 0 ]]; then
+    # Filas de datos: empiezan por ",_result," (la cabecera es ",result,...").
+    # grep -c ya imprime 0 cuando no hay coincidencias; "|| true" evita el "0\n0".
+    ROWS=$(echo "$INFLUX_CSV" | grep -c "^,_result," 2>/dev/null || true)
+    if [[ "${ROWS:-0}" -gt 0 ]]; then
         ok "machine_stats" "$ROWS campo(s) en los últimos 15 min"
         # Mostrar valores
         echo "$INFLUX_CSV" | python3 -c "
@@ -169,8 +171,8 @@ for row in reader:
     fi
 fi
 
-# ── 5. MinIO — cold path ──────────────────────────────────────
-section "MinIO — cold path (JSON)"
+# ── 5. RustFS — cold path ──────────────────────────────────────
+section "RustFS — cold path (JSON)"
 FILE_COUNT=$(python3 -c "
 from minio import Minio
 try:
@@ -183,11 +185,11 @@ except Exception as e:
 " 2>/dev/null)
 
 if echo "$FILE_COUNT" | grep -q "ERROR"; then
-    fail "MinIO datalake" "$FILE_COUNT"
+    fail "RustFS datalake" "$FILE_COUNT"
 elif [[ "${FILE_COUNT:-0}" -gt 0 ]]; then
-    ok "Archivos en MinIO" "$FILE_COUNT archivo(s)"
+    ok "Archivos en RustFS" "$FILE_COUNT archivo(s)"
 else
-    warn "MinIO datalake" "0 archivos (kafka_to_minio.py escribe cada 60s — ¿está corriendo? pgrep -f kafka_to_minio)"
+    warn "RustFS datalake" "0 archivos (kafka_to_minio.py escribe cada 60s — ¿está corriendo? pgrep -f kafka_to_minio)"
 fi
 
 # ── 6. FastAPI ────────────────────────────────────────────────

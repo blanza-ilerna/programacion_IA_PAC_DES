@@ -4,7 +4,8 @@
 volumes:
   redpanda-data:
   influxdb-data:
-  minio-data:
+  rustfs-data:
+  rustfs-logs:
   grafana-data:
 
 
@@ -210,26 +211,33 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # 5. Almacenamiento Histórico: MinIO (S3)
+  # 5. Almacenamiento Histórico: servidor S3 (RustFS)
+  # MinIO dejó de publicar imágenes oficiales (repo archivado en abril de 2026),
+  # así que se usa RustFS, compatible con la API S3. Se mantiene el nombre de
+  # servicio/hostname "minio" porque es el endpoint S3 que usan scripts, tests y
+  # notebooks (MINIO_ENDPOINT=minio:9000).
+  # Sin healthcheck: la doc oficial no garantiza curl dentro de la imagen;
+  # start.sh y test_connectivity.sh tratan "sin healthcheck" como OK.
+  # Comprobación manual: curl http://minio:9000/health
   minio:
-    image: minio/minio:latest
+    image: rustfs/rustfs:1.0.6
     hostname: minio
     restart: unless-stopped
     ports:
       - "19000:9000" # S3 API
       - "19001:9001" # WebUI Console
     environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=Ilerna_Programaci0n
-    command: server /data --console-address ":9001"
+      - RUSTFS_ACCESS_KEY=admin
+      - RUSTFS_SECRET_KEY=Ilerna_Programaci0n
+      - RUSTFS_ADDRESS=:9000
+      - RUSTFS_CONSOLE_ADDRESS=:9001
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_OBS_LOGGER_LEVEL=error
+      - RUSTFS_OBS_LOG_DIRECTORY=/var/log/rustfs/
+    command: /data
     volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      - rustfs-data:/data
+      - rustfs-logs:/var/log/rustfs
     networks:
       - ilerna_ia_big_data
     logging:

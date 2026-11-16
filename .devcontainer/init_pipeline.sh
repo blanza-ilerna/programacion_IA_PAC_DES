@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# init_pipeline.sh — Inicializa topics Kafka, bucket MinIO, jobs Flink y aliases
+# init_pipeline.sh — Inicializa topics Kafka, bucket RustFS, jobs Flink y aliases
 # Ejecutar manualmente tras confirmar que la infraestructura está healthy:
 #   source .devcontainer/init_pipeline.sh
 
@@ -30,9 +30,9 @@ else
   echo -e "    ${YELLOW}⚠️  Redpanda no encontrado${NC}"
 fi
 
-# ── 2. Bucket MinIO ──────────────────────────────────────────
+# ── 2. Bucket RustFS ──────────────────────────────────────────
 echo ""
-echo ">>> [2/4] Creando bucket MinIO y purgando archivos con schema incorrecto..."
+echo ">>> [2/4] Creando bucket RustFS y purgando archivos con schema incorrecto..."
 python3 -c "
 from minio import Minio
 import json, sys
@@ -64,24 +64,18 @@ try:
             for o in objs:
                 c.remove_object('datalake', o.object_name)
             print(f'    \033[33m⚠️  Schema incorrecto detectado (temperature sin _c) — {len(objs)} archivos purgados\033[0m')
-            print(f'    \033[32m✅ MinIO listo para recibir datos con schema correcto (temperature_c)\033[0m')
+            print(f'    \033[32m✅ RustFS listo para recibir datos con schema correcto (temperature_c)\033[0m')
         else:
             print(f'    \033[32m✅ {len(objs)} archivos en datalake con schema correcto\033[0m')
     else:
         print('    \033[32m✅ Bucket datalake vacío — listo\033[0m')
 
 except Exception as e:
-    print(f'    \033[33m⚠️  MinIO no disponible: {e}\033[0m', file=sys.stderr)
+    print(f'    \033[33m⚠️  RustFS no disponible: {e}\033[0m', file=sys.stderr)
 " 2>&1 || true
 
-# Configurar mc alias para comandos desde el devcontainer
-MINIO_CTR="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i minio | head -1 || true)"
-if [[ -n "${MINIO_CTR}" ]]; then
-  docker exec "${MINIO_CTR}" mc alias set local http://localhost:9000 admin Ilerna_Programaci0n \
-    > /dev/null 2>&1 \
-    && echo -e "    ${GREEN}✅ mc alias 'local' configurado${NC}" \
-    || echo -e "    ${YELLOW}⚠️  No se pudo configurar mc alias${NC}"
-fi
+# (El servidor S3 es RustFS: no incluye el cliente `mc`, por lo que ya no se
+#  configura ningún alias. El bucket se crea arriba con la librería Python `minio`.)
 
 # ── 3. Jobs Flink ────────────────────────────────────────────
 echo ""
@@ -94,11 +88,11 @@ if [[ -n "${JM_ID}" ]]; then
     "curl -s http://localhost:8081/jobs/overview 2>/dev/null || echo '{\"jobs\":[]}'")
 
   RUNNING_JOBS=$(echo "${JOBS_JSON}" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(len([j for j in d.get('jobs',[]) if j['status']=='RUNNING']))" \
+    "import sys,json; d=json.load(sys.stdin); print(len([j for j in d.get('jobs',[]) if j['state']=='RUNNING']))" \
     2>/dev/null || echo 0)
 
   FAILED_IDS=$(echo "${JOBS_JSON}" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status']=='FAILED'))" \
+    "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state']=='FAILED'))" \
     2>/dev/null || echo "")
 
   if [[ "${RUNNING_JOBS}" -eq 3 ]]; then
@@ -118,7 +112,7 @@ if [[ -n "${JM_ID}" ]]; then
     if [[ "${RUNNING_JOBS}" -gt 0 && "${RUNNING_JOBS}" -lt 3 ]]; then
       echo -e "    ${YELLOW}⚠️  Pipeline incompleto (${RUNNING_JOBS}/3 running) — reiniciando todos${NC}"
       ALL_IDS=$(echo "${JOBS_JSON}" | python3 -c \
-        "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status']=='RUNNING'))" \
+        "import sys,json; d=json.load(sys.stdin); print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state']=='RUNNING'))" \
         2>/dev/null || echo "")
       for ID in ${ALL_IDS}; do
         docker exec "${JM_ID}" bash -c \
@@ -151,7 +145,7 @@ if [[ -n "${JM_ID}" ]]; then
         | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-print(len([j for j in d.get('jobs',[]) if j['status']=='RUNNING']))
+print(len([j for j in d.get('jobs',[]) if j['state']=='RUNNING']))
 " 2>/dev/null || echo 0)
       if [[ "${RUNNING_COUNT}" -ge 3 ]]; then
         echo -e " ${GREEN}✅ Los 3 jobs están RUNNING${NC}"
@@ -170,22 +164,30 @@ else
   echo -e "    ${YELLOW}⚠️  jobmanager no encontrado${NC}"
 fi
 
-# ── 4. MinIO writer (cold path) ──────────────────────────────
+# ── 4. RustFS writer (cold path) ──────────────────────────────
 echo ""
-echo ">>> [4/4] Arrancando minio-writer (cold path)..."
+echo ">>> [4/4] Arrancando rustfs-writer (cold path)..."
 if pgrep -f "kafka_to_minio.py" > /dev/null 2>&1; then
-  echo -e "    ${GREEN}✅ minio-writer ya está corriendo${NC}"
+  echo -e "    ${GREEN}✅ rustfs-writer ya está corriendo${NC}"
 else
   nohup python /workspaces/programacion_IA_PAC_DES/src/03_storage/kafka_to_minio.py \
     > /tmp/minio_writer.log 2>&1 &
   MINIO_PID=$!
   sleep 3
   if kill -0 "${MINIO_PID}" 2>/dev/null; then
-    echo -e "    ${GREEN}✅ minio-writer corriendo (PID ${MINIO_PID}) — log: /tmp/minio_writer.log${NC}"
+    echo -e "    ${GREEN}✅ rustfs-writer corriendo (PID ${MINIO_PID}) — log: /tmp/minio_writer.log${NC}"
   else
-    echo -e "    ${RED}❌ minio-writer se cayó al arrancar — revisa: tail /tmp/minio_writer.log${NC}"
+    echo -e "    ${RED}❌ rustfs-writer se cayó al arrancar — revisa: tail /tmp/minio_writer.log${NC}"
   fi
 fi
+
+# ── Herramientas S3 opcionales (nunca bloquean el pipeline) ──
+# AWS CLI con perfil "rustfs" + función `s3`, y cliente web s3manager en :19002.
+echo ""
+echo ">>> Herramientas S3 (opcionales: si fallan, solo avisan)..."
+_INIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "${_INIT_DIR}/setup_s3_cli.sh" || true
+bash "${_INIT_DIR}/s3web.sh" start || true
 
 # ── Aliases de desarrollo ────────────────────────────────────
 BASHRC="/home/vscode/.bashrc"
@@ -248,7 +250,7 @@ flink-restart() {
     | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status'] not in ('CANCELED','FINISHED')))
+print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['state'] not in ('CANCELED','FINISHED')))
 " 2>/dev/null || echo "")
   if [[ -n "${ACTIVE_IDS}" ]]; then
     for ID in ${ACTIVE_IDS}; do
@@ -271,9 +273,10 @@ print(' '.join(j['jid'] for j in d.get('jobs',[]) if j['status'] not in ('CANCEL
 
 alias sim='python src/01_ingestion/sensor_simulator.py --machines 5 --fault-rate 0.1'
 alias bridge='python src/01_ingestion/mqtt_to_redpanda_bridge.py'
-alias minio-writer='python src/03_storage/kafka_to_minio.py'
-alias minio-status='pgrep -fa kafka_to_minio && tail -20 /tmp/minio_writer.log || echo "minio-writer NO está corriendo. Lanza: minio-writer &"'
-alias minio-log='tail -f /tmp/minio_writer.log'
+alias rustfs-writer='python src/03_storage/kafka_to_minio.py'
+alias rustfs-status='pgrep -fa kafka_to_minio && tail -20 /tmp/minio_writer.log || echo "rustfs-writer NO está corriendo. Lanza: rustfs-writer &"'
+alias rustfs-log='tail -f /tmp/minio_writer.log'
+alias s3web='bash /workspaces/programacion_IA_PAC_DES/.devcontainer/s3web.sh'
 alias api='uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload'
 alias ui='streamlit run src/05_ui/app.py --server.port 8501'
 alias nb='jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --ServerApp.token="" --ServerApp.password="" --NotebookApp.token="" --NotebookApp.password=""'
@@ -294,9 +297,11 @@ alias verify-db='python /workspaces/programacion_IA_PAC_DES/tests/test_databases
 alias aliases='echo "
   sim            → Simulador de sensores (5 máquinas, fault-rate 0.1)
   bridge         → Puente MQTT → Redpanda
-  minio-writer   → Cold path: kafka_to_minio.py (lanzar en background: minio-writer &)
-  minio-status   → Verifica si minio-writer está corriendo + últimas líneas de log
-  minio-log      → Sigue el log de minio-writer en tiempo real
+  rustfs-writer  → Cold path: kafka_to_minio.py (lanzar en background: rustfs-writer &)
+  rustfs-status  → Verifica si rustfs-writer está corriendo + últimas líneas de log
+  rustfs-log     → Sigue el log de rustfs-writer en tiempo real
+  s3             → AWS CLI contra RustFS (ej.: s3 ls s3://datalake/ --recursive)
+  s3web          → Cliente web S3 en :19002 (s3web start|stop|status)
   api            → FastAPI en :8000
   ui             → Streamlit dashboard en :8501
   nb             → JupyterLab en :8888
@@ -328,12 +333,13 @@ echo "╠═══════════════════════�
 echo -e "║  ${RED}🔴${NC} Redpanda Console  → http://localhost:18080       ║"
 echo -e "║  ${YELLOW}🟠${NC} Flink UI          → http://localhost:18081       ║"
 echo -e "║  ${YELLOW}🟡${NC} InfluxDB UI       → http://localhost:18086       ║"
-echo -e "║  ${GREEN}🟢${NC} MinIO Console     → http://localhost:19001       ║"
+echo -e "║  ${GREEN}🟢${NC} RustFS Console    → http://localhost:19001       ║"
+echo -e "║  ${GREEN}🟢${NC} S3 Web (lectura)  → http://localhost:19002       ║"
 echo -e "║  ${CYAN}🔵${NC} Grafana           → http://localhost:13000       ║"
 echo    "║  ⚪ FastAPI           → http://localhost:18000       ║"
 echo    "║  ⚪ Streamlit         → http://localhost:18501       ║"
 echo    "║  ⚪ Jupyter           → http://localhost:18888       ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "    Aliases disponibles: sim | bridge | minio-writer | minio-status | minio-log | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
+echo "    Aliases disponibles: sim | bridge | rustfs-writer | rustfs-status | rustfs-log | s3 | s3web | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
 echo ""

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # download_flink_jars.sh
-# Descarga dependencias Flink y configura el plugin S3 para MinIO.
+# Descarga dependencias Flink y configura el plugin S3 para RustFS.
 # Ejecutar UNA VEZ dentro del contenedor jobmanager:
 #
 #   docker exec -it $(docker ps -qf "label=com.docker.compose.service=jobmanager") \
@@ -48,7 +48,7 @@ download_if_missing "Kafka connector" \
 
 # ── 2. S3 FileSystem Plugin (para flink_to_minio_job.py) ─────
 echo ""
-echo ">>> [2/3] S3 Hadoop Plugin (para escribir JSON en MinIO)"
+echo ">>> [2/3] S3 Hadoop Plugin (para escribir JSON en RustFS)"
 
 S3_JAR="flink-s3-fs-hadoop-${FLINK_VERSION}.jar"
 S3_PLUGIN_DIR="${TARGET_PLUGINS}/flink-s3-fs-hadoop"
@@ -70,19 +70,19 @@ else
     "${S3_PLUGIN_DIR}/${S3_JAR}"
 fi
 
-# ── 3. Configurar MinIO (S3-compatible) en flink-conf.yaml ────
+# ── 3. Configurar RustFS (S3-compatible) en flink-conf.yaml ────
 echo ""
-echo ">>> [3/3] Configurando S3 endpoint para MinIO en flink-conf.yaml"
+echo ">>> [3/3] Configurando S3 endpoint para RustFS en flink-conf.yaml"
 
 FLINK_CONF="/opt/flink/conf/flink-conf.yaml"
-S3_CONF_MARKER="# MinIO S3 config (ILERNA)"
+S3_CONF_MARKER="# RustFS S3 config (ILERNA)"
 
 if grep -q "${S3_CONF_MARKER}" "${FLINK_CONF}" 2>/dev/null; then
   echo -e "  ${YELLOW}⏭  Configuración S3 ya presente en flink-conf.yaml${NC}"
 else
   cat >> "${FLINK_CONF}" << 'EOF'
 
-# MinIO S3 config (ILERNA)
+# RustFS S3 config (ILERNA)
 s3.endpoint: http://minio:9000
 s3.path.style.access: true
 s3.access-key: admin
