@@ -348,7 +348,11 @@ def test_grafana():
             # Extraer valor si existe
             val = "sin valor"
             try:
-                val = res["results"]["A"]["frames"][0]["data"]["values"][-1][0]
+                frame = frames[0]
+                names = [f.get("name") for f in frame["schema"]["fields"]]
+                # La columna de valor no siempre es la última (max() conserva device_id)
+                idx = names.index("_value") if "_value" in names else len(names) - 1
+                val = frame["data"]["values"][idx][0]
                 val = f"valor={val:.2f}" if isinstance(val, float) else f"valor={val}"
             except Exception:
                 pass

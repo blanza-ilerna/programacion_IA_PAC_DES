@@ -147,8 +147,10 @@ INFLUX_CSV=$(curl -s --max-time 5 \
 if [[ -z "$INFLUX_CSV" ]]; then
     fail "InfluxDB query" "sin respuesta"
 else
-    ROWS=$(echo "$INFLUX_CSV" | grep -c "^,result" 2>/dev/null || echo 0)
-    if [[ "$ROWS" -gt 0 ]]; then
+    # Filas de datos: empiezan por ",_result," (la cabecera es ",result,...").
+    # grep -c ya imprime 0 cuando no hay coincidencias; "|| true" evita el "0\n0".
+    ROWS=$(echo "$INFLUX_CSV" | grep -c "^,_result," 2>/dev/null || true)
+    if [[ "${ROWS:-0}" -gt 0 ]]; then
         ok "machine_stats" "$ROWS campo(s) en los últimos 15 min"
         # Mostrar valores
         echo "$INFLUX_CSV" | python3 -c "

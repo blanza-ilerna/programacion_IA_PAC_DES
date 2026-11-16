@@ -135,10 +135,13 @@ def generate_fault(machine_id: str) -> str:
                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         return json.dumps(sign_message(payload, machine_id))
     else:  # broken_chain: mensaje válido pero con hash manipulado
-        payload = generate_reading(machine_id, time.time())
+        last_good = _chain_state.get(machine_id, GENESIS_HASH)
+        payload = generate_reading(machine_id, time.time())   # avanza _chain_state...
+        _chain_state[machine_id] = last_good                  # ...así que lo restauramos
         payload["prev_hash"] = "tampered_" + "0" * 56   # rompe la cadena
         payload["hash"]      = compute_hash(payload, payload["prev_hash"])
-        # NO actualizamos _chain_state → el siguiente mensaje quedará desincronizado
+        # El mensaje manipulado va al DLQ y Flink no actualiza su estado; como el
+        # simulador tampoco avanza, el siguiente mensaje vuelve a encadenar bien.
         log.warning("💀 CADENA ROTA simulada para %s", machine_id)
         return json.dumps(payload)
 

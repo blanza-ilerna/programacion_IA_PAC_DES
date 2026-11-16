@@ -35,7 +35,8 @@ start() {
   net="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "${s3}" 2>/dev/null | awk '{print $1}')"
   if [[ -z "${net}" ]]; then warn "No se pudo determinar la red Docker del S3: s3web no arrancado"; return 0; fi
 
-  if docker run -d --name "${NAME}" --restart unless-stopped --network "${net}" \
+  local err
+  if err="$(docker run -d --name "${NAME}" --restart unless-stopped --network "${net}" \
        -p "${HOST_PORT}:8080" \
        -e ENDPOINT="minio:9000" \
        -e ACCESS_KEY_ID="${MINIO_ACCESS:-admin}" \
@@ -44,10 +45,12 @@ start() {
        -e USE_SSL="false" \
        -e BUCKET_LOOKUP="Path" \
        -e ALLOW_DELETE="false" \
-       "${IMAGE}" >/dev/null 2>&1; then
+       "${IMAGE}" 2>&1 >/dev/null)"; then
     ok "Cliente web S3 (s3manager) arrancado → puerto ${HOST_PORT} (solo lectura)"
   else
-    warn "No se pudo arrancar s3web (¿imagen ${IMAGE} no disponible?). No afecta al pipeline."
+    docker rm -f "${NAME}" >/dev/null 2>&1 || true   # no dejar un contenedor a medias
+    warn "No se pudo arrancar s3web (${IMAGE}). No afecta al pipeline."
+    warn "Error de docker: $(echo "${err}" | tail -n 2 | tr '\n' ' ')"
     warn "Alternativas: python tests/list_datalake.py  ·  s3 ls s3://datalake/"
   fi
   return 0
