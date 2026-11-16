@@ -283,7 +283,7 @@ Nota: el bridge convierte F a C antes de publicar en Kafka → Flink normalizar�
 
 ---
 
-## Bloque 5 — MinIO
+## Bloque 5 — RustFS
 
 ### Ejercicio 5.1 — Listar ficheros del cold path
 
@@ -305,7 +305,7 @@ for obj in c.list_objects("datalake", prefix="clean/", recursive=True):
 
 ### Ejercicio 5.2 — Leer un fichero JSON con DuckDB
 
-Escribe la query DuckDB para leer todos los ficheros JSON del cold path desde MinIO y mostrar las 5 primeras filas de `machine-003`.
+Escribe la query DuckDB para leer todos los ficheros JSON del cold path desde RustFS y mostrar las 5 primeras filas de `machine-003`.
 
 <details>
 <summary>Solución</summary>
@@ -346,7 +346,7 @@ conn.close()
 
 Escribe un script Python que:
 1. Consulte InfluxDB las últimas temperaturas (hot path).
-2. Consulte MinIO los datos históricos (cold path).
+2. Consulte RustFS los datos históricos (cold path).
 3. Una ambas con DuckDB `UNION ALL` y muestre el total por fuente.
 
 <details>
@@ -373,7 +373,7 @@ hot_rows = [{"device_id": r.values["device_id"], "value": r.get_value(),
 hot_df = pd.DataFrame(hot_rows)
 client.close()
 
-# --- Cold path: MinIO via DuckDB ---
+# --- Cold path: RustFS via DuckDB ---
 conn = duckdb.connect()
 conn.execute("INSTALL httpfs; LOAD httpfs;")
 conn.execute("""
@@ -383,7 +383,7 @@ conn.execute("""
 """)
 try:
     cold_df = conn.execute("""
-        SELECT device_id, CAST(temperature_c AS DOUBLE) AS value, ts, 'MinIO (cold)' AS source
+        SELECT device_id, CAST(temperature_c AS DOUBLE) AS value, ts, 'RustFS (cold)' AS source
         FROM read_json('s3://datalake/clean/**/*.json', hive_partitioning=true, auto_detect=true)
         WHERE temperature_c IS NOT NULL
         LIMIT 1000
@@ -493,7 +493,7 @@ Escribe un script bash que compruebe en orden:
 1. Topics Kafka y número de mensajes.
 2. Jobs Flink RUNNING.
 3. Datos en InfluxDB (últimos 5 min).
-4. Ficheros en MinIO cold path.
+4. Ficheros en RustFS cold path.
 
 <details>
 <summary>Solución</summary>
@@ -541,7 +541,7 @@ c=Minio('minio:9000',access_key='admin',secret_key='Ilerna_Programaci0n',secure=
 objs=list(c.list_objects('datalake',prefix='clean/',recursive=True))
 total_kb=sum(o.size for o in objs)/1024
 print(f'  Ficheros: {len(objs)}  |  Tamaño total: {total_kb:.0f} KB')
-" 2>/dev/null || echo "  MinIO no accesible"
+" 2>/dev/null || echo "  RustFS no accesible"
 ```
 </details>
 
@@ -765,6 +765,6 @@ def machines_summary():
 | Flink REST API | 2.1 – 2.3 | 15% |
 | InfluxDB Flux | 3.1 – 3.3 | 15% |
 | FastAPI | 4.1 – 4.4 | 15% |
-| MinIO / DuckDB | 5.1 – 5.3 | 15% |
+| RustFS / DuckDB | 5.1 – 5.3 | 15% |
 | Código Python | 6.1 – 6.2, 8.1 – 8.3 | 15% |
 | Diagnóstico | 7.1 – 7.3 | 10% |

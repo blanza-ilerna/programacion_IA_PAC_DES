@@ -91,7 +91,7 @@
       "onAutoForward": "silent"
     },
     "19001": {
-      "label": "MinIO Console (Data Lake UI)",
+      "label": "RustFS Console (Data Lake UI)",
       "onAutoForward": "silent"
     },
     "18086": {
@@ -107,7 +107,7 @@
       "onAutoForward": "ignore"
     },
     "19000": {
-      "label": "MinIO (S3 API)",
+      "label": "RustFS (S3 API)",
       "onAutoForward": "ignore"
     }
   }

@@ -61,7 +61,7 @@
 │  (tiempo real)   │              │  Escribe NDJSON particionado Hive:    │
 └──────────────────┘              │  datalake/clean/year=.../month=.../   │
        │                          │  day=.../hour=.../<ts>.json           │
-       │                          │  MinIO :19000  (ventana 60s)          │
+       │                          │  RustFS :19000  (ventana 60s)          │
        │                          └──────────────────────────────────────┘
        │                                          │
        └──────────────────┬───────────────────────┘
@@ -130,7 +130,7 @@ RP=$(docker ps -qf "label=com.docker.compose.service=redpanda")
 docker exec $RP rpk topic list
 ```
 
-### Paso 3 — Verificar bucket MinIO
+### Paso 3 — Verificar bucket RustFS
 
 Creado automáticamente por `init_pipeline.sh`. Para verificar:
 
@@ -162,7 +162,7 @@ docker exec $JM flink run -py /opt/flink/jobs/flink_analytics_job.py &
 flink-list
 ```
 
-> **Nota**: El cold path (MinIO) lo gestiona `kafka_to_minio.py` como proceso Python independiente,
+> **Nota**: El cold path (RustFS) lo gestiona `kafka_to_minio.py` como proceso Python independiente,
 > no un job Flink. Se arranca automáticamente con `init_pipeline.sh` en el paso 4/4.
 
 ### Paso 5 — Arrancar el pipeline Python
@@ -184,7 +184,7 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 streamlit run src/05_ui/app.py --server.port 8501
 ```
 
-> **Cold path (MinIO)**: `kafka_to_minio.py` lo arranca automáticamente `init_pipeline.sh`.
+> **Cold path (RustFS)**: `kafka_to_minio.py` lo arranca automáticamente `init_pipeline.sh`.
 > Si necesitas relanzarlo manualmente:
 > ```bash
 > python src/03_storage/kafka_to_minio.py &
@@ -514,17 +514,17 @@ streamlit run src/05_ui/app.py --server.port 8501
 
 Botón que lanza una **query federada con DuckDB**:
 1. Consulta InfluxDB (hot path) → `pandas.DataFrame`
-2. Lee NDJSON de MinIO vía `read_json()` con `hive_partitioning=true` (cold path) → `pandas.DataFrame`
+2. Lee NDJSON de RustFS vía `read_json()` con `hive_partitioning=true` (cold path) → `pandas.DataFrame`
 3. DuckDB registra ambos DataFrames como tablas virtuales y hace `UNION ALL`
 4. Muestra gráfica unificada coloreada por fuente y estadísticas cruzadas
 
 ```python
 conn.register("hot_data",  hot_df)   # InfluxDB → RAM
-conn.register("cold_data", cold_df)  # MinIO NDJSON → RAM
+conn.register("cold_data", cold_df)  # RustFS NDJSON → RAM
 result = conn.execute("""
     SELECT device_id, value, ts, 'InfluxDB (hot)' AS source FROM hot_data
     UNION ALL
-    SELECT device_id, value, ts, 'MinIO (cold)'   AS source FROM cold_data
+    SELECT device_id, value, ts, 'RustFS (cold)'   AS source FROM cold_data
     ORDER BY ts DESC LIMIT 5000
 """).df()
 ```
@@ -548,7 +548,7 @@ jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
 #### Secciones del notebook
 
 **Sección 1 — Conexión y configuración**
-- Imports, supresión de warnings y variables de conexión para InfluxDB, MinIO y FastAPI (hostnames internos del devcontainer)
+- Imports, supresión de warnings y variables de conexión para InfluxDB, RustFS y FastAPI (hostnames internos del devcontainer)
 
 **Sección 2 — InfluxDB: machine_stats (Hot Path)**
 - Query Flux de los últimos 60 min con `pivot()` sobre el measurement `machine_stats`
@@ -556,14 +556,14 @@ jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
 - Gauges de temperatura actual por máquina
 - Tabla de estadísticas (media, máximo, alertas) por dispositivo
 
-**Sección 3 — MinIO: Cold Path NDJSON**
-- DuckDB con extensión `httpfs` conectado a MinIO (`minio:9000`)
+**Sección 3 — RustFS: Cold Path NDJSON**
+- DuckDB con extensión `httpfs` conectado a RustFS (`minio:9000`)
 - Query sobre `s3://datalake/clean/**/*.json` con `read_json()` y `hive_partitioning=true`
 - Columnas explícitas para manejar esquemas mixtos de archivos históricos
 - Distribución de registros por dispositivo
 
 **Sección 4 — Lambda Query: UNION ALL Hot + Cold**
-- Query federada DuckDB que unifica InfluxDB (hot) y MinIO NDJSON (cold) vía `UNION ALL`
+- Query federada DuckDB que unifica InfluxDB (hot) y RustFS NDJSON (cold) vía `UNION ALL`
 - Gráfica unificada coloreada por fuente de datos
 
 **Sección 5 — IsolationForest: Entrenamiento y Predicción**
@@ -665,7 +665,7 @@ docker exec $(docker ps -qf "label=com.docker.compose.service=redpanda") \
 
 ---
 
-### A2 — Arquitectura Lambda con Python → MinIO NDJSON
+### A2 — Arquitectura Lambda con Python → RustFS NDJSON
 
 **Archivo:** `src/03_storage/kafka_to_minio.py`
 
@@ -676,7 +676,7 @@ La Arquitectura Lambda divide el procesamiento en dos caminos paralelos:
 | Path | Latencia | Tecnología | Uso |
 |------|----------|-----------|-----|
 | **Hot** | segundos | Flink → InfluxDB | Alertas, monitorización en tiempo real |
-| **Cold** | ~60 s | Python → MinIO/NDJSON | Análisis histórico, ML, reportes |
+| **Cold** | ~60 s | Python → RustFS/NDJSON | Análisis histórico, ML, reportes |
 
 Ambos paths se combinan en la capa de consulta (DuckDB) para obtener una vista unificada.
 
@@ -691,7 +691,7 @@ Ambos paths se combinan en la capa de consulta (DuckDB) para obtener una vista u
 2. Acumula mensajes en una ventana de 60 segundos
 3. Cada 60s escribe un archivo NDJSON (una línea JSON por mensaje)
 4. Ruta: datalake/clean/year=YYYY/month=MM/day=DD/hour=HH/<timestamp>.json
-5. Hace commit de offsets solo cuando la escritura en MinIO fue exitosa
+5. Hace commit de offsets solo cuando la escritura en RustFS fue exitosa
 ```
 
 #### Particionado Hive
@@ -723,7 +723,7 @@ WHERE year = '2026' AND month = '03'   -- Solo lee las particiones necesarias
 # Hot path: últimos 60 min de InfluxDB
 hot_df  = query_influxdb(range_minutes=60)
 
-# Cold path: histórico de MinIO NDJSON (puede ser días/semanas)
+# Cold path: histórico de RustFS NDJSON (puede ser días/semanas)
 cold_df = query_cold_path()   # DuckDB read_json con hive_partitioning
 
 # DuckDB une ambas fuentes en memoria (UNION ALL)
@@ -733,7 +733,7 @@ conn.register("cold", cold_df)
 unified = conn.execute("""
     SELECT device_id, value, ts, 'InfluxDB (hot)' AS source FROM hot
     UNION ALL
-    SELECT device_id, value, ts, 'MinIO (cold)'   AS source FROM cold
+    SELECT device_id, value, ts, 'RustFS (cold)'   AS source FROM cold
     ORDER BY ts DESC LIMIT 5000
 """).df()
 ```
@@ -749,12 +749,12 @@ python src/03_storage/kafka_to_minio.py &
 # Ver el log
 tail -f /tmp/minio_writer.log
 
-# Verificar archivos en MinIO (aparecen cada 60 segundos)
+# Verificar archivos en RustFS (aparecen cada 60 segundos)
 python3 -c "
 from minio import Minio
 c = Minio('minio:9000', access_key='admin', secret_key='Ilerna_Programaci0n', secure=False)
 objects = list(c.list_objects('datalake', prefix='clean/', recursive=True))
-print(f'{len(objects)} archivos NDJSON en MinIO')
+print(f'{len(objects)} archivos NDJSON en RustFS')
 for o in objects[:5]:
     print(' ', o.object_name, f'({(o.size or 0)/1024:.1f} KB)')
 "
@@ -891,7 +891,7 @@ fields:  avg_temp_c=82.34, max_temp_c=87.12, count=28, alert=1
 time:    1741687260  (inicio de ventana en segundos Unix)
 ```
 
-### `datalake/clean/year=2026/month=03/day=11/hour=09/*.json` (MinIO)
+### `datalake/clean/year=2026/month=03/day=11/hour=09/*.json` (RustFS)
 ```
 Columnas: device_id, temperature_c, unit_original, ts, _ingested_at
 Formato:  NDJSON (una línea JSON por registro, sin dependencias extra)
@@ -909,7 +909,7 @@ El hash debe generarse en el origen del dato (Edge), no en el transporte. Si el 
 Cada máquina tiene su propia cadena de hashes independiente. Si usáramos estado global, el mensaje 2 de machine-001 dependería del hash de machine-002, lo que es incorrecto. El estado keyed garantiza que cada cadena se verifica de forma aislada.
 
 **¿Por qué dos jobs para hot/cold path en lugar de uno?**
-El hot path (InfluxDB) necesita baja latencia y escribe registro por registro. El cold path (MinIO/NDJSON) necesita alta eficiencia y escribe por lotes/particiones. Mezclarlos en un job crearía presión entre ambas latencias. La separación permite escalar cada path independientemente.
+El hot path (InfluxDB) necesita baja latencia y escribe registro por registro. El cold path (RustFS/NDJSON) necesita alta eficiencia y escribe por lotes/particiones. Mezclarlos en un job crearía presión entre ambas latencias. La separación permite escalar cada path independientemente.
 
 **¿Por qué IsolationForest y no un umbral fijo en la API?**
 Un umbral fijo (>80°C) no captura contexto histórico de cada máquina. machine-003 normalmente va a 55°C; si sube a 70°C, no supera el umbral pero es estadísticamente anómalo para esa máquina específica. IsolationForest aprende el "rango normal" de cada dispositivo, y el modelo entrenado sobre todos los datos lo captura globalmente.
@@ -920,7 +920,7 @@ Segunda línea: Flink normalization tiene `json.ignore-parse-errors=true` → ca
 Tercera línea: el hash verifier detecta cualquier manipulación post-ingesta.
 
 **¿Por qué DuckDB en lugar de Spark para el análisis histórico?**
-DuckDB es un motor OLAP embebido (sin servidor), perfecto para análisis interactivos desde Streamlit. Lee NDJSON desde S3/MinIO directamente con `httpfs` y `read_json()` sin descargar los ficheros completos. Para datasets > 100 GB o procesamiento distribuido se usaría Spark o Trino.
+DuckDB es un motor OLAP embebido (sin servidor), perfecto para análisis interactivos desde Streamlit. Lee NDJSON desde S3/RustFS directamente con `httpfs` y `read_json()` sin descargar los ficheros completos. Para datasets > 100 GB o procesamiento distribuido se usaría Spark o Trino.
 
 ---
 
@@ -936,7 +936,7 @@ DuckDB es un motor OLAP embebido (sin servidor), perfecto para análisis interac
 | `flink_analytics_job.py` | `apache-flink` | 1.18.0 | Tumble Window + sink InfluxDB |
 | `flink_analytics_job.py` | `urllib.request` | stdlib | HTTP Line Protocol a InfluxDB (sin deps extras) |
 | `flink_hash_verifier_job.py` | `apache-flink` | 1.18.0 | DataStream KeyedProcessFunction |
-| `kafka_to_minio.py` | `confluent-kafka`, `minio` | latest | Consumidor Kafka → MinIO NDJSON (cold path) |
+| `kafka_to_minio.py` | `confluent-kafka`, `minio` | latest | Consumidor Kafka → RustFS NDJSON (cold path) |
 | `src/api/main.py` | `fastapi`, `uvicorn` | latest | API REST asíncrona |
 | `src/api/main.py` | `influxdb-client` | latest | Consultas Flux a InfluxDB |
 | `src/api/main.py` | `paho-mqtt` | ≥2.0 | Publicación manual vía MQTT |
@@ -947,5 +947,5 @@ DuckDB es un motor OLAP embebido (sin servidor), perfecto para análisis interac
 | `src/05_ui/app.py` | `plotly` | latest | Gráficas interactivas |
 | `src/05_ui/app.py` | `minio` | latest | Listado Parquet cold path |
 | `notebooks/*.ipynb` | `jupyterlab` | latest | Exploración de datos |
-| `notebooks/*.ipynb` | `duckdb` | latest | Query MinIO Parquet con httpfs |
+| `notebooks/*.ipynb` | `duckdb` | latest | Query RustFS Parquet con httpfs |
 | `notebooks/*.ipynb` | `plotly` | latest | Visualización interactiva |

@@ -169,8 +169,8 @@ for row in reader:
     fi
 fi
 
-# ── 5. MinIO — cold path ──────────────────────────────────────
-section "MinIO — cold path (JSON)"
+# ── 5. RustFS — cold path ──────────────────────────────────────
+section "RustFS — cold path (JSON)"
 FILE_COUNT=$(python3 -c "
 from minio import Minio
 try:
@@ -183,11 +183,11 @@ except Exception as e:
 " 2>/dev/null)
 
 if echo "$FILE_COUNT" | grep -q "ERROR"; then
-    fail "MinIO datalake" "$FILE_COUNT"
+    fail "RustFS datalake" "$FILE_COUNT"
 elif [[ "${FILE_COUNT:-0}" -gt 0 ]]; then
-    ok "Archivos en MinIO" "$FILE_COUNT archivo(s)"
+    ok "Archivos en RustFS" "$FILE_COUNT archivo(s)"
 else
-    warn "MinIO datalake" "0 archivos (kafka_to_minio.py escribe cada 60s — ¿está corriendo? pgrep -f kafka_to_minio)"
+    warn "RustFS datalake" "0 archivos (kafka_to_minio.py escribe cada 60s — ¿está corriendo? pgrep -f kafka_to_minio)"
 fi
 
 # ── 6. FastAPI ────────────────────────────────────────────────

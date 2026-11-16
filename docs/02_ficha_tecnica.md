@@ -14,13 +14,13 @@
 | Proceso       | `flink_hash_verifier_job` | PyFlink DataStream API | N/A      | N/A            | **A1**: Verifica SHA256 hash-chain por dispositivo. sensors_raw → sensors_verified / sensors_invalid. |
 | Proceso       | `flink_normalization_job` | PyFlink Table API  | N/A            | N/A            | **Hito 2**: Normaliza temperatura a °C (UDF to_celsius). sensors_raw → sensors_clean / sensors_invalid. |
 | Proceso       | `flink_analytics_job`     | PyFlink Table API  | N/A            | N/A            | **Hito 3**: Tumble Window 1 min. AVG/MAX + alertas > 80°C → InfluxDB. |
-| Proceso       | `kafka_to_minio`    | Python + confluent-kafka| N/A            | N/A            | **A2**: Cold path Lambda. sensors_clean → MinIO NDJSON particionado por año/mes/día/hora. Arranca como proceso Python (no Flink). |
+| Proceso       | `kafka_to_minio`    | Python + confluent-kafka| N/A            | N/A            | **A2**: Cold path Lambda. sensors_clean → RustFS NDJSON particionado por año/mes/día/hora. Arranca como proceso Python (no Flink). |
 | Storage       | `influxdb`          | InfluxDB 2.x            | **18086**      | 8086           | Series temporales. Measurement `machine_stats` (Hot Path).    |
 | Storage       | `minio`             | S3 Object Storage       | **19000**      | 9000           | S3 API. Bucket `datalake/clean/` con archivos NDJSON (Cold Path). |
-| Storage       | `minio-console`     | MinIO Web UI            | **19001**      | 9001           | Consola de administración de buckets y objetos.               |
+| Storage       | `minio-console`     | RustFS Web UI            | **19001**      | 9001           | Consola de administración de buckets y objetos.               |
 | Servicio      | `fastapi`           | Python + Uvicorn        | **18000**      | 8000           | API REST: estado de máquinas, alertas, historial, predict (IsolationForest), model/train. |
 | Analítica     | `streamlit`         | Python Framework        | **18501**      | 8501           | Dashboard: tiempo real, historial, alertas, Lambda Query, IA Anomalías, Pipeline Health, Hash Chain, Modelos Avanzados, Ayuda. |
-| Analítica     | `duckdb`            | OLAP In-process         | N/A            | N/A            | Motor SQL embebido. Lee NDJSON desde MinIO vía extensión `httpfs` con `hive_partitioning=true`. |
+| Analítica     | `duckdb`            | OLAP In-process         | N/A            | N/A            | Motor SQL embebido. Lee NDJSON desde RustFS vía extensión `httpfs` con `hive_partitioning=true`. |
 | Visualización | `grafana`           | Grafana 12.x            | **13000**      | 3000           | Dashboards provisioned: Telemetría IoT (InfluxDB) + Estado Pipeline (FastAPI vía Infinity plugin). |
 | IDE           | `jupyterlab`        | Jupyter                 | **18888**      | 8888           | Notebooks para exploración de datos y prototipado de IA.      |
 
@@ -48,8 +48,8 @@
 | Stream Engine    | Apache Flink (PyFlink)        | 1.18.1      | Normalización (UDF), ventanas, alertas. 3 jobs Python.|
 | Broker Kafka     | Redpanda                      | v25.3.x     | Sustituto de Kafka, compatible con API                |
 | Time Series DB   | InfluxDB                      | 2.x         | Almacenamiento de métricas en tiempo real (hot path)  |
-| Object Storage   | MinIO                         | latest      | Histórico en NDJSON via S3 API (cold path)            |
-| OLAP Engine      | DuckDB                        | latest      | Análisis batch sobre NDJSON desde MinIO con `httpfs`  |
+| Object Storage   | RustFS                         | latest      | Histórico en NDJSON via S3 API (cold path)            |
+| OLAP Engine      | DuckDB                        | latest      | Análisis batch sobre NDJSON desde RustFS con `httpfs`  |
 | Web Framework    | FastAPI + Uvicorn             | latest      | API REST de servicio de datos                         |
 | Dashboard        | Streamlit                     | latest      | Interfaz de usuario interactiva (9 pestañas)          |
 | Visualización    | Plotly                        | latest      | Gráficas interactivas en Streamlit y notebooks        |
@@ -58,7 +58,7 @@
 | Cliente MQTT     | paho-mqtt                     | ≥ 2.0       | `CallbackAPIVersion.VERSION2` en bridge y simulador   |
 | Cliente Kafka    | confluent-kafka               | latest      | Productor/consumidor Python con idempotencia          |
 | Cliente InfluxDB | influxdb-client               | latest      | Consultas Flux desde FastAPI y Streamlit              |
-| Cliente MinIO    | minio                         | latest      | Operaciones S3 desde `kafka_to_minio.py`              |
+| Cliente RustFS    | minio                         | latest      | Operaciones S3 desde `kafka_to_minio.py`              |
 | Data Analysis    | pandas                        | latest      | Manipulación de DataFrames en Streamlit y notebooks   |
 | ML               | scikit-learn (IsolationForest)| latest      | **A3**: Detección de anomalías no supervisada en FastAPI. `contamination=0.1`, pickle persistence. |
 | Infraestructura  | Docker + Docker Compose       | —           | Orquestación de todos los servicios                   |
@@ -71,7 +71,7 @@
 | Servicio  | Usuario | Contraseña      | Token                  |
 |-----------|---------|-----------------|------------------------|
 | InfluxDB  | admin   | Ilerna_Programaci0n | `supersecrettoken`     |
-| MinIO     | admin   | Ilerna_Programaci0n | —                      |
+| RustFS     | admin   | Ilerna_Programaci0n | —                      |
 | Grafana   | admin   | Ilerna_Programaci0n | —                      |
 | MQTT      | —       | —               | anónimo (sin auth)     |
 
@@ -145,7 +145,7 @@ En `flink_analytics_job.py`, todos los eventos entre `T` y `T+60s` se agregan y 
 - `taskmanager`: worker con 2 task slots. Ejecuta los operadores de los jobs.
 - El `Dockerfile.jobmanager` personalizado pre-instala Python 3, el JAR `flink-sql-connector-kafka`, y extrae `pyflink.zip` en el classpath para que las UDFs Python sean accesibles desde el TaskManager.
 
-**Nota de limitación**: El conector FileSystem de Flink para S3/MinIO requería JARs de Hadoop (`hadoop-aws`, `aws-java-sdk`) que producían conflictos de classpath con Flink 1.18 + Java 17. El cold path se reemplazó por un proceso Python independiente (`kafka_to_minio.py`), obteniendo el mismo resultado funcional sin dependencias de Hadoop.
+**Nota de limitación**: El conector FileSystem de Flink para S3/RustFS requería JARs de Hadoop (`hadoop-aws`, `aws-java-sdk`) que producían conflictos de classpath con Flink 1.18 + Java 17. El cold path se reemplazó por un proceso Python independiente (`kafka_to_minio.py`), obteniendo el mismo resultado funcional sin dependencias de Hadoop.
 
 ---
 
@@ -162,7 +162,7 @@ Organización: bucket `sensores`, org `ilerna`, token `supersecrettoken`. Retenc
 
 ---
 
-### MinIO
+### RustFS
 
 Servidor de object storage compatible con la API S3 de Amazon. Almacena los archivos del cold path (NDJSON particionados). Ventajas en este contexto:
 
@@ -178,10 +178,10 @@ El bucket `datalake` se crea automáticamente por `init_pipeline.sh`. Los archiv
 
 Motor SQL analítico embebido (in-process). No requiere servidor: se instancia como librería Python en el mismo proceso de Streamlit o en los notebooks. Rol clave en la Arquitectura Lambda:
 
-- **Extensión `httpfs`**: permite acceder a archivos en S3/MinIO directamente via HTTP sin descargarlos a disco. Configurado con el endpoint interno `minio:9000`.
+- **Extensión `httpfs`**: permite acceder a archivos en S3/RustFS directamente via HTTP sin descargarlos a disco. Configurado con el endpoint interno `minio:9000`.
 - **`read_json()`**: lectura directa de NDJSON con esquema explícito (`columns = {device_id: 'VARCHAR', ...}`) para evitar inferencia errónea cuando los archivos históricos tienen estructuras ligeramente distintas.
 - **`hive_partitioning=true`**: DuckDB detecta automáticamente las columnas de partición (`year`, `month`, `day`, `hour`) a partir de los nombres de directorio y las expone como columnas filtrables.
-- **Query federada**: `conn.register("hot", df_influx)` registra un DataFrame pandas como tabla virtual. El `UNION ALL` combina datos de InfluxDB y MinIO en memoria sin copiar datos a ningún sistema externo.
+- **Query federada**: `conn.register("hot", df_influx)` registra un DataFrame pandas como tabla virtual. El `UNION ALL` combina datos de InfluxDB y RustFS en memoria sin copiar datos a ningún sistema externo.
 
 ---
 
@@ -208,7 +208,7 @@ El dashboard tiene **9 pestañas**:
 1. **Tiempo Real** — gauges con `st.metric` + refresco automático cada 5s via `st_autorefresh`.
 2. **Historial** — serie temporal de `avg_temp_c` por `device_id` con Plotly `go.Scatter`.
 3. **Alertas** — scatter plot de eventos `alert=1` con `plotly.express.scatter`.
-4. **Lambda Query** — DuckDB UNION ALL entre InfluxDB y MinIO, con botón de ejecución manual.
+4. **Lambda Query** — DuckDB UNION ALL entre InfluxDB y RustFS, con botón de ejecución manual.
 5. **IA Anomalías** — entrenamiento de IsolationForest vía `POST /model/train`, predictor interactivo con `st.slider`.
 6. **Pipeline Health** — estado de jobs Flink (API Flink REST), topics Kafka y servicios.
 7. **Hash Chain** — mensajes verificados/inválidos del DLQ con estadísticas de integridad.
@@ -248,7 +248,7 @@ Plataforma de observabilidad open-source. En este proyecto se usan dos dashboard
 
 ### JupyterLab
 
-Entorno de notebooks interactivos. Permite mezclar código Python, visualizaciones Plotly y texto Markdown en un único documento. En este proyecto se usan para exploración ad-hoc y para demostrar el pipeline completo sin necesitar desplegar la UI de Streamlit. El notebook `01_exploracion_datos.ipynb` cubre: hot path (InfluxDB), cold path (MinIO NDJSON + DuckDB), Lambda Query, IsolationForest y verificación de hash-chain. El notebook `02_analisis_calidad.ipynb` cubre análisis de calidad de datos: distribución de unidades, integridad de hash-chain, completitud del cold path y comparación local vs DLQ de Flink.
+Entorno de notebooks interactivos. Permite mezclar código Python, visualizaciones Plotly y texto Markdown en un único documento. En este proyecto se usan para exploración ad-hoc y para demostrar el pipeline completo sin necesitar desplegar la UI de Streamlit. El notebook `01_exploracion_datos.ipynb` cubre: hot path (InfluxDB), cold path (RustFS NDJSON + DuckDB), Lambda Query, IsolationForest y verificación de hash-chain. El notebook `02_analisis_calidad.ipynb` cubre análisis de calidad de datos: distribución de unidades, integridad de hash-chain, completitud del cold path y comparación local vs DLQ de Flink.
 
 ---
 
@@ -257,7 +257,7 @@ Entorno de notebooks interactivos. Permite mezclar código Python, visualizacion
 Cliente oficial de Confluent para la API de Kafka, implementado en C (librdkafka) con bindings Python. Es el cliente de referencia por rendimiento y por soportar todas las funcionalidades de la API Kafka:
 
 - **Productor** (`mqtt_to_redpanda_bridge.py`): `enable.idempotence=True` garantiza entrega exactly-once desde el bridge. La clave Kafka es `device_id`, lo que concentra los mensajes de cada máquina en la misma partición y preserva el orden de llegada por dispositivo.
-- **Consumidor** (`kafka_to_minio.py`): `group.id` único, `auto.offset.reset=earliest` para no perder mensajes históricos, commit manual de offsets solo tras escritura exitosa en MinIO (semántica at-least-once con idempotencia en MinIO).
+- **Consumidor** (`kafka_to_minio.py`): `group.id` único, `auto.offset.reset=earliest` para no perder mensajes históricos, commit manual de offsets solo tras escritura exitosa en RustFS (semántica at-least-once con idempotencia en RustFS).
 
 ---
 
@@ -271,7 +271,7 @@ SDK oficial de InfluxDB 2.x para Python. En `src/api/main.py` y `src/05_ui/app.p
 
 ### minio (Python client)
 
-Cliente oficial de MinIO para Python, compatible con AWS S3. En `kafka_to_minio.py` se usa para subir archivos NDJSON con `put_object()`. En los notebooks se usa para listar objetos con `list_objects()` y verificar la existencia del bucket. La librería maneja internamente la autenticación por firma HMAC-SHA256 (compatible con AWS Signature V4).
+Cliente oficial de RustFS para Python, compatible con AWS S3. En `kafka_to_minio.py` se usa para subir archivos NDJSON con `put_object()`. En los notebooks se usa para listar objetos con `list_objects()` y verificar la existencia del bucket. La librería maneja internamente la autenticación por firma HMAC-SHA256 (compatible con AWS Signature V4).
 
 ---
 
@@ -356,7 +356,7 @@ Si cualquier mensaje intermedio se modifica, su hash recalculado difiere del que
 
 **Autodetección de puertos en Codespaces**: Configurado `"autoForwardPorts": false` en `devcontainer.json`. Solo se exponen los puertos declarados explícitamente en `forwardPorts`.
 
-**Persistencia de datos**: Volúmenes Docker nombrados para Redpanda, InfluxDB, MinIO y Grafana. Los datos sobreviven reinicios de contenedores pero se pierden si se ejecuta `docker volume prune`.
+**Persistencia de datos**: Volúmenes Docker nombrados para Redpanda, InfluxDB, RustFS y Grafana. Los datos sobreviven reinicios de contenedores pero se pierden si se ejecuta `docker volume prune`.
 
 **Flink y Python**: El contenedor `flink:1.18.1-java17` necesita Python 3 y el JAR Kafka SQL Connector para ejecutar jobs PyFlink. `Dockerfile.jobmanager` pre-instala ambos, además de extraer `pyflink.zip` para que los UDFs Python puedan ejecutarse desde el TaskManager.
 
@@ -371,5 +371,5 @@ Si cualquier mensaje intermedio se modifica, su hash recalculado difiere del que
 | ID | Nombre                     | Archivos clave                                               | Descripción técnica                                                                                  |
 |----|----------------------------|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
 | A1 | Hash-Chain SHA256          | `sensor_simulator.py`, `flink_hash_verifier_job.py`, `src/processing/hash_chain.py` | El simulador encadena mensajes con SHA256 (prev_hash→hash). Flink verifica la cadena con `ValueState` keyed por device_id. Mensajes íntegros → `sensors_verified`, tampered → `sensors_invalid`. |
-| A2 | Lambda Architecture JSON   | `src/03_storage/kafka_to_minio.py`, `src/05_ui/app.py`      | Cold path: proceso Python consume `sensors_clean` y escribe NDJSON con particionado Hive en MinIO. DuckDB en Streamlit consulta ambos paths con `UNION ALL`. Ventana de escritura: 60 segundos. |
+| A2 | Lambda Architecture JSON   | `src/03_storage/kafka_to_minio.py`, `src/05_ui/app.py`      | Cold path: proceso Python consume `sensors_clean` y escribe NDJSON con particionado Hive en RustFS. DuckDB en Streamlit consulta ambos paths con `UNION ALL`. Ventana de escritura: 60 segundos. |
 | A3 | IsolationForest ML         | `src/api/main.py` (FastAPI), `src/05_ui/app.py`             | Singleton `AnomalyDetector` con `IsolationForest(contamination=0.1)`. Entrena con histórico de InfluxDB. Devuelve `is_anomaly`, `failure_prob ∈ [0,1]`, `interpretation`. Pickle persistence en `/tmp/`. |

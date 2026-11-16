@@ -2,7 +2,7 @@
 test_flow.py - Prueba el pipeline de datos de extremo a extremo.
 
 Servicios probados:
-  MQTT → Redpanda (Kafka) → InfluxDB → MinIO → Grafana
+  MQTT → Redpanda (Kafka) → InfluxDB → RustFS → Grafana
 
 Uso:
   python tests/test_flow.py
@@ -203,7 +203,7 @@ def test_influxdb() -> None:
 
 
 def test_minio() -> None:
-    section("MinIO (S3)")
+    section("RustFS (S3)")
     try:
         from minio import Minio
         from minio.error import S3Error
@@ -214,30 +214,30 @@ def test_minio() -> None:
         # Crear bucket si no existe
         if not client.bucket_exists(MINIO_BUCKET):
             client.make_bucket(MINIO_BUCKET)
-            ok("MinIO bucket creado", MINIO_BUCKET)
+            ok("RustFS bucket creado", MINIO_BUCKET)
         else:
-            ok("MinIO bucket ya existe", MINIO_BUCKET)
+            ok("RustFS bucket ya existe", MINIO_BUCKET)
 
         # Subir objeto
         obj_name = f"test-{uuid.uuid4().hex[:8]}.json"
         data = json.dumps({"test": "flow", "ts": time.time()}).encode()
         client.put_object(MINIO_BUCKET, obj_name, io.BytesIO(data), length=len(data))
-        ok("MinIO put object", obj_name)
+        ok("RustFS put object", obj_name)
 
         # Verificar que existe
         objects = [o.object_name for o in client.list_objects(MINIO_BUCKET)]
         if obj_name in objects:
-            ok("MinIO list objects", f"{len(objects)} objeto(s) en {MINIO_BUCKET}")
+            ok("RustFS list objects", f"{len(objects)} objeto(s) en {MINIO_BUCKET}")
         else:
-            fail("MinIO list objects", f"{obj_name} no encontrado")
+            fail("RustFS list objects", f"{obj_name} no encontrado")
 
         # Limpiar
         client.remove_object(MINIO_BUCKET, obj_name)
 
     except ImportError:
-        fail("MinIO", "minio no instalado — pip install minio")
+        fail("RustFS", "minio no instalado — pip install minio")
     except Exception as e:
-        fail("MinIO", str(e))
+        fail("RustFS", str(e))
 
 
 def test_grafana() -> None:

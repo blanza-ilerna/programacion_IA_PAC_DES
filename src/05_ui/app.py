@@ -9,7 +9,7 @@ Pestañas (views/):
   📡 Tiempo Real       — realtime.py        Temperatura actual de cada máquina (InfluxDB)
   📈 Historial         — history.py         Serie temporal de temperatura normalizada
   ⚠️  Alertas          — alerts.py          Eventos con avg > 80°C
-  🗄️  Lambda Query     — lambda_query.py    InfluxDB (hot) + MinIO NDJSON (cold) via DuckDB
+  🗄️  Lambda Query     — lambda_query.py    InfluxDB (hot) + RustFS NDJSON (cold) via DuckDB
   🤖 IA Anomalías      — ai_anomalies.py    Predicción con IsolationForest desde FastAPI
   🏥 Pipeline Health   — pipeline_health.py Estado de servicios, jobs Flink y topics Kafka
   🔐 Hash Chain        — hash_security.py   Integridad SHA256 por dispositivo (verified / DLQ)
@@ -18,7 +18,7 @@ Pestañas (views/):
 
 Arquitectura Lambda:
   Hot path  → Flink → InfluxDB                    (segundos de latencia, últimas horas)
-  Cold path → kafka_to_minio.py → MinIO (NDJSON)  (minutos de latencia, histórico)
+  Cold path → kafka_to_minio.py → RustFS (NDJSON)  (minutos de latencia, histórico)
   Query layer → DuckDB UNION ALL                  (visión unificada en tiempo real)
 
 Uso:

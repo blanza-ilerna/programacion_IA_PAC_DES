@@ -1,9 +1,9 @@
 """
-kafka_to_minio.py — Consumidor directo sensors_clean → MinIO JSON
+kafka_to_minio.py — Consumidor directo sensors_clean → RustFS JSON
 
 Alternativa al flink_to_minio_job.py que no requiere JARs de Flink.
 Lee de 'sensors_clean', acumula en ventanas de 60 s y escribe
-archivos JSON particionados por Hive en MinIO:
+archivos JSON particionados por Hive en RustFS:
 
   s3a://datalake/clean/year=2026/month=03/day=15/hour=21/<ts>.json
 
@@ -102,14 +102,14 @@ def _flush(client: Minio, records: list[dict]) -> bool:
         return True
     except Exception as e:
         _stats["errors"] += 1
-        print(f"[minio-writer] ✗ Error escribiendo en MinIO: {e}")
+        print(f"[minio-writer] ✗ Error escribiendo en RustFS: {e}")
         return False
 
 
 def run():
-    print("[minio-writer] Iniciando sensors_clean → MinIO JSON writer")
+    print("[minio-writer] Iniciando sensors_clean → RustFS JSON writer")
     print(f"  Kafka : {KAFKA_BROKER}  topic={KAFKA_TOPIC}  group={KAFKA_GROUP}")
-    print(f"  MinIO : {MINIO_ENDPOINT}  bucket={MINIO_BUCKET}/{MINIO_PATH}  ventana={WINDOW_SECONDS}s")
+    print(f"  RustFS : {MINIO_ENDPOINT}  bucket={MINIO_BUCKET}/{MINIO_PATH}  ventana={WINDOW_SECONDS}s")
     print()
 
     minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=False)

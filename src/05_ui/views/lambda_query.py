@@ -1,4 +1,4 @@
-"""Pestaña 🗄️ Lambda Query: InfluxDB (hot) + MinIO (cold) vía DuckDB."""
+"""Pestaña 🗄️ Lambda Query: InfluxDB (hot) + RustFS (cold) vía DuckDB."""
 
 import duckdb
 import pandas as pd
@@ -24,7 +24,7 @@ def render() -> None:
     | Path | Tecnología | Latencia | Uso |
     |------|-----------|----------|-----|
     | **Hot** (tiempo real) | Flink → InfluxDB | segundos | Alertas, monitorización |
-    | **Cold** (histórico) | Flink → MinIO/Parquet | minutos | Análisis mensual, ML |
+    | **Cold** (histórico) | Flink → RustFS/Parquet | minutos | Análisis mensual, ML |
 
     **DuckDB** actúa como capa de consulta unificada: hace `UNION ALL` de ambas fuentes
     en memoria sin mover datos, gracias a la extensión `httpfs` para S3.
@@ -43,7 +43,7 @@ def render() -> None:
                 hot_df = hot_df.rename(columns={"avg_temp_c": "value"})
                 hot_df["ts"] = hot_df["ts"].astype(str)
 
-        with st.spinner("Consultando MinIO Parquet (cold path)..."):
+        with st.spinner("Consultando RustFS Parquet (cold path)..."):
             cold_df = query_cold_path()
             if not cold_df.empty and "ts" in cold_df.columns:
                 cold_df["ts"] = cold_df["ts"].astype(str)
@@ -54,7 +54,7 @@ def render() -> None:
 
         col_h, col_c, col_pct = st.columns(3)
         col_h.metric("🔴 Hot path (InfluxDB)", f"{hot_count:,} registros")
-        col_c.metric("🔵 Cold path (MinIO)", f"{cold_count:,} registros")
+        col_c.metric("🔵 Cold path (RustFS)", f"{cold_count:,} registros")
         if total > 0:
             col_pct.metric(
                 "Proporción hot/cold",
@@ -68,7 +68,7 @@ def render() -> None:
                 y=["Fuentes"],
                 orientation="h",
                 marker_color=["#EF553B", "#636EFA"],
-                text=[f"InfluxDB {hot_count:,}", f"MinIO {cold_count:,}"],
+                text=[f"InfluxDB {hot_count:,}", f"RustFS {cold_count:,}"],
                 textposition="inside",
             ))
             fig_prop.update_layout(
@@ -102,7 +102,7 @@ def render() -> None:
                 unified["device_id"]
                 + unified["source"].map({
                     "InfluxDB (hot)": " (hot)",
-                    "MinIO (cold)":   " (cold)",
+                    "RustFS (cold)":   " (cold)",
                 }).fillna("")
             )
 
@@ -112,13 +112,13 @@ def render() -> None:
                 y="value",
                 color="trace_key",
                 symbol="source",
-                title="Vista unificada Lambda: Hot (InfluxDB) + Cold (MinIO Parquet)",
+                title="Vista unificada Lambda: Hot (InfluxDB) + Cold (RustFS Parquet)",
                 labels={"ts_dt": "Tiempo", "value": "Temperatura media (°C)", "trace_key": "Fuente, device_id"},
                 template="plotly_dark",
                 color_discrete_map=_color_map,
                 symbol_map={
                     "InfluxDB (hot)": "circle",
-                    "MinIO (cold)":   "diamond",
+                    "RustFS (cold)":   "diamond",
                 },
                 opacity=0.7,
             )
@@ -167,7 +167,7 @@ def render() -> None:
                     part_df.sort_values(["year", "month", "day", "hour"]),
                     x="particion",
                     y="registros",
-                    title="Registros Parquet por partición hora (MinIO cold path)",
+                    title="Registros Parquet por partición hora (RustFS cold path)",
                     template="plotly_dark",
                     color="registros",
                     color_continuous_scale="Blues",

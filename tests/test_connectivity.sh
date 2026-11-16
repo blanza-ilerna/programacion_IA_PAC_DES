@@ -71,7 +71,7 @@ check_docker_health "Redpanda Console" "redpanda-console"
 check_docker_health "Flink JobManager" "jobmanager"
 check_docker_health "Flink TaskManager" "taskmanager"
 check_docker_health "InfluxDB"         "influxdb"
-check_docker_health "MinIO"            "minio"
+check_docker_health "RustFS"            "minio"
 
 echo ""
 echo "── HTTP / Web UIs ──────────────────────────────────────"

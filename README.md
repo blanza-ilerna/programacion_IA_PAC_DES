@@ -86,9 +86,11 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 
 > **Nota sobre el almacenamiento S3.** MinIO dejó de publicar imágenes oficiales (repositorio
 > archivado en abril de 2026), así que el cold path usa **RustFS** (`rustfs/rustfs:1.0.6`), compatible
-> con la API S3. Para no tocar el código, el servicio sigue llamándose `minio` en la red Docker
-> (`MINIO_ENDPOINT=minio:9000`) y el cliente Python `minio` funciona igual. Comprobar que responde:
-> `curl http://minio:9000/health`. La imagen no incluye el cliente `mc`.
+> con la API S3. Para no tocar el código, **se conservan estos nombres**: el servicio/hostname Docker
+> `minio` (`MINIO_ENDPOINT=minio:9000`), las variables `MINIO_*`, el cliente Python `minio` (habla S3,
+> sirve con cualquier servidor compatible), el script `kafka_to_minio.py` y los alias `minio-*`.
+> Comprobar que responde: `python -c "import urllib.request;print(urllib.request.urlopen('http://minio:9000/health').status)"`.
+> La imagen no incluye el cliente `mc`.
 
 ## Estructura del proyecto
 
@@ -100,7 +102,7 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │   ├── Dockerfile.jobmanager       # Imagen Flink con JARs Kafka/InfluxDB y PyFlink
 │   ├── devcontainer.json           # Configuración GitHub Codespaces
 │   ├── start.sh                    # postStartCommand: levanta Docker y espera healthy
-│   └── init_pipeline.sh            # MANUAL: topics, bucket MinIO, jobs Flink, aliases
+│   └── init_pipeline.sh            # MANUAL: topics, bucket RustFS, jobs Flink, aliases
 │
 ├── src/
 │   ├── 01_ingestion/
@@ -111,14 +113,14 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │   │   ├── transformations.py          # UDF to_celsius (F/K → °C)
 │   │   └── validators.py               # Validación de schema de mensajes
 │   ├── 03_storage/
-│   │   └── kafka_to_minio.py           # Cold path: sensors_clean → MinIO NDJSON (60s ventana)
+│   │   └── kafka_to_minio.py           # Cold path: sensors_clean → RustFS NDJSON (60s ventana)
 │   ├── api/
 │   │   ├── main.py                     # Hito 4: FastAPI REST (/machines, /alerts, /stats)
 │   │   └── anomaly_model.py            # IsolationForest: train + predict
 │   └── 05_ui/                          # Hito 4: Streamlit + DuckDB Lambda Query hot+cold
 │       ├── app.py                      # Punto de entrada: página, sidebar y reparto de pestañas
 │       ├── settings.py                 # Configuración (variables de entorno)
-│       ├── datasources.py              # Acceso a datos: InfluxDB, MinIO/DuckDB, Flink, Kafka
+│       ├── datasources.py              # Acceso a datos: InfluxDB, RustFS/DuckDB, Flink, Kafka
 │       └── views/                      # Una pestaña por módulo (cada una expone render())
 │           ├── realtime.py  history.py  alerts.py  lambda_query.py  ai_anomalies.py
 │           └── pipeline_health.py  hash_security.py  advanced_models.py  ayuda.py
@@ -149,7 +151,7 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 │   ├── test_connectivity.sh            # Smoke test: ¿responden todos los servicios?
 │   ├── test_flow.py                    # Test E2E: publica mensaje y verifica en cada capa
 │   ├── test_processing.py              # Tests unitarios de transformations y validators
-│   ├── test_databases.py               # Verifica InfluxDB, MinIO y DuckDB query
+│   ├── test_databases.py               # Verifica InfluxDB, RustFS y DuckDB query
 │   ├── verify_pipeline.sh              # Diagnóstico completo del pipeline en ejecución
 │   └── check_grafana_endpoints.py      # Qué endpoints/campos usan los dashboards de Grafana y si responden
 │
@@ -181,7 +183,7 @@ source .devcontainer/init_pipeline.sh
 
 Esto:
 - Crea los **topics Kafka** (`sensors_raw`, `sensors_clean`, `sensors_verified`, `sensors_invalid`)
-- Crea el **bucket MinIO** `datalake`
+- Crea el **bucket RustFS** `datalake`
 - Lanza los **3 jobs Flink** (normalización, analytics, hash verifier)
 - Arranca el **minio-writer** (cold path Python)
 - Añade **aliases de desarrollo** al shell (`sim`, `bridge`, `api`, `ui`, `nb`, `flink-list`, ...)
@@ -218,9 +220,9 @@ mqtt-sub
 
 > **minio-writer** ya corre en background (arrancado por `init_pipeline.sh`).
 > Verifica con `minio-status`. Si se cayó, relánzalo con `minio-writer &`.
-> Escribe archivos JSON a MinIO cada 60s — espera ~1 min para ver el primer archivo.
+> Escribe archivos JSON a RustFS cada 60s — espera ~1 min para ver el primer archivo.
 
-En ~30 segundos empezarán a llegar datos a Redpanda y desde ahí Flink los procesará hacia InfluxDB y MinIO.
+En ~30 segundos empezarán a llegar datos a Redpanda y desde ahí Flink los procesará hacia InfluxDB y RustFS.
 
 ### 4. Verificar estado del pipeline
 
@@ -272,7 +274,7 @@ nb
 # Abrir: notebooks/01_exploracion_datos.ipynb
 ```
 
-El notebook cubre: hot path (InfluxDB), cold path (MinIO NDJSON vía DuckDB), Lambda Query (UNION ALL), entrenamiento IsolationForest y verificación de hash-chain.
+El notebook cubre: hot path (InfluxDB), cold path (RustFS NDJSON vía DuckDB), Lambda Query (UNION ALL), entrenamiento IsolationForest y verificación de hash-chain.
 
 ## Resolución de problemas
 
@@ -301,7 +303,7 @@ flink-restart
 3. Verifica que los 3 jobs Flink están `RUNNING`: `flink-jobs`
 4. Los dashboards usan rango `-3h` — espera al menos 1 minuto tras reiniciar los jobs
 
-### Sin datos en MinIO (cold path)
+### Sin datos en RustFS (cold path)
 
 ```bash
 # Verificar si está corriendo y arrancarlo si no
@@ -313,7 +315,7 @@ tail -f /tmp/minio_writer.log
 
 Los archivos JSON aparecen en `datalake/clean/year=.../month=.../day=.../hour=.../` cada 60 segundos.
 
-**Verificar objetos en MinIO y que DuckDB los lee correctamente:**
+**Verificar objetos en RustFS y que DuckDB los lee correctamente:**
 
 ```bash
 python3 -c "
@@ -445,7 +447,7 @@ c.close()
 
 | Script                  | Entrada       | Salida                      | Descripción                                 |
 |-------------------------|---------------|-----------------------------|---------------------------------------------|
-| kafka_to_minio.py       | sensors_clean | MinIO datalake/clean/       | NDJSON particionado Hive, ventana 60s       |
+| kafka_to_minio.py       | sensors_clean | RustFS datalake/clean/       | NDJSON particionado Hive, ventana 60s       |
 
 ## Variables de entorno principales
 
@@ -459,6 +461,6 @@ Sobrescribir con variables de entorno si se ejecutan fuera del devcontainer.
 | `KAFKA_BROKER`    | `redpanda:29092`            | Bootstrap servers Kafka          |
 | `INFLUX_URL`      | `http://influxdb:8086`      | URL InfluxDB                     |
 | `INFLUX_TOKEN`    | `supersecrettoken`          | Token de autenticación InfluxDB  |
-| `MINIO_ENDPOINT`  | `minio:9000`                | Endpoint MinIO S3                |
+| `MINIO_ENDPOINT`  | `minio:9000`                | Endpoint RustFS S3                |
 | `ALERT_THRESHOLD` | `80.0`                      | Temperatura de alerta (°C)       |
-| `MINIO_BUCKET`    | `datalake`                  | Bucket MinIO para histórico      |
+| `MINIO_BUCKET`    | `datalake`                  | Bucket RustFS para histórico      |

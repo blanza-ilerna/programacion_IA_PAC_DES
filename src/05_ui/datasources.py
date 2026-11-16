@@ -1,4 +1,4 @@
-"""Acceso a datos del dashboard: InfluxDB (hot), MinIO/DuckDB (cold), Flink y Kafka."""
+"""Acceso a datos del dashboard: InfluxDB (hot), RustFS/DuckDB (cold), Flink y Kafka."""
 
 import warnings
 import json
@@ -116,7 +116,7 @@ def query_alerts(range_minutes: int) -> pd.DataFrame:
 # ── DuckDB helpers ────────────────────────────────────────────
 
 def _init_duckdb_s3(conn: duckdb.DuckDBPyConnection):
-    """Configura DuckDB con credenciales MinIO (S3-compatible)."""
+    """Configura DuckDB con credenciales RustFS (S3-compatible)."""
     conn.execute("INSTALL httpfs; LOAD httpfs;")
     conn.execute(f"""
         SET s3_endpoint          = '{MINIO_ENDPOINT}';
@@ -127,9 +127,9 @@ def _init_duckdb_s3(conn: duckdb.DuckDBPyConnection):
     """)
 
 
-@st.cache_data(ttl=120, show_spinner="Cargando datos históricos desde MinIO...")
+@st.cache_data(ttl=120, show_spinner="Cargando datos históricos desde RustFS...")
 def query_cold_path() -> pd.DataFrame:
-    """Lee NDJSON desde MinIO cold path (kafka_to_minio.py).
+    """Lee NDJSON desde RustFS cold path (kafka_to_minio.py).
 
     Los ficheros están en: datalake/clean/year=YYYY/month=MM/day=DD/hour=HH/*.json
     Escritos por kafka_to_minio.py con schema de sensors_clean:
@@ -175,7 +175,7 @@ def query_lambda_federated(hot_df: pd.DataFrame, cold_df: pd.DataFrame) -> pd.Da
 
     Combina:
       · hot_df  → datos recientes de InfluxDB (hot path, baja latencia)
-      · cold_df → datos históricos de MinIO Parquet (cold path, alta escala)
+      · cold_df → datos históricos de RustFS Parquet (cold path, alta escala)
 
     DuckDB hace un UNION ALL en memoria sin necesidad de mover datos a disco.
     """
@@ -194,14 +194,14 @@ def query_lambda_federated(hot_df: pd.DataFrame, cold_df: pd.DataFrame) -> pd.Da
             query = """
             SELECT device_id, value, ts, 'InfluxDB (hot)'  AS source FROM hot_data
             UNION ALL
-            SELECT device_id, value, ts, 'MinIO (cold)' AS source FROM cold_data
+            SELECT device_id, value, ts, 'RustFS (cold)' AS source FROM cold_data
             ORDER BY ts DESC
             LIMIT 5000
             """
         elif not hot_df.empty:
             query = "SELECT device_id, value, ts, 'InfluxDB (hot)' AS source FROM hot_data ORDER BY ts DESC"
         else:
-            query = "SELECT device_id, value, ts, 'MinIO (cold)' AS source FROM cold_data ORDER BY ts DESC LIMIT 5000"
+            query = "SELECT device_id, value, ts, 'RustFS (cold)' AS source FROM cold_data ORDER BY ts DESC LIMIT 5000"
 
         return conn.execute(query).df()
     finally:

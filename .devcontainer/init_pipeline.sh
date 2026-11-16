@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# init_pipeline.sh — Inicializa topics Kafka, bucket MinIO, jobs Flink y aliases
+# init_pipeline.sh — Inicializa topics Kafka, bucket RustFS, jobs Flink y aliases
 # Ejecutar manualmente tras confirmar que la infraestructura está healthy:
 #   source .devcontainer/init_pipeline.sh
 
@@ -30,9 +30,9 @@ else
   echo -e "    ${YELLOW}⚠️  Redpanda no encontrado${NC}"
 fi
 
-# ── 2. Bucket MinIO ──────────────────────────────────────────
+# ── 2. Bucket RustFS ──────────────────────────────────────────
 echo ""
-echo ">>> [2/4] Creando bucket MinIO y purgando archivos con schema incorrecto..."
+echo ">>> [2/4] Creando bucket RustFS y purgando archivos con schema incorrecto..."
 python3 -c "
 from minio import Minio
 import json, sys
@@ -64,14 +64,14 @@ try:
             for o in objs:
                 c.remove_object('datalake', o.object_name)
             print(f'    \033[33m⚠️  Schema incorrecto detectado (temperature sin _c) — {len(objs)} archivos purgados\033[0m')
-            print(f'    \033[32m✅ MinIO listo para recibir datos con schema correcto (temperature_c)\033[0m')
+            print(f'    \033[32m✅ RustFS listo para recibir datos con schema correcto (temperature_c)\033[0m')
         else:
             print(f'    \033[32m✅ {len(objs)} archivos en datalake con schema correcto\033[0m')
     else:
         print('    \033[32m✅ Bucket datalake vacío — listo\033[0m')
 
 except Exception as e:
-    print(f'    \033[33m⚠️  MinIO no disponible: {e}\033[0m', file=sys.stderr)
+    print(f'    \033[33m⚠️  RustFS no disponible: {e}\033[0m', file=sys.stderr)
 " 2>&1 || true
 
 # (El servidor S3 es RustFS: no incluye el cliente `mc`, por lo que ya no se
@@ -164,7 +164,7 @@ else
   echo -e "    ${YELLOW}⚠️  jobmanager no encontrado${NC}"
 fi
 
-# ── 4. MinIO writer (cold path) ──────────────────────────────
+# ── 4. RustFS writer (cold path) ──────────────────────────────
 echo ""
 echo ">>> [4/4] Arrancando minio-writer (cold path)..."
 if pgrep -f "kafka_to_minio.py" > /dev/null 2>&1; then
@@ -322,7 +322,7 @@ echo "╠═══════════════════════�
 echo -e "║  ${RED}🔴${NC} Redpanda Console  → http://localhost:18080       ║"
 echo -e "║  ${YELLOW}🟠${NC} Flink UI          → http://localhost:18081       ║"
 echo -e "║  ${YELLOW}🟡${NC} InfluxDB UI       → http://localhost:18086       ║"
-echo -e "║  ${GREEN}🟢${NC} MinIO Console     → http://localhost:19001       ║"
+echo -e "║  ${GREEN}🟢${NC} RustFS Console     → http://localhost:19001       ║"
 echo -e "║  ${CYAN}🔵${NC} Grafana           → http://localhost:13000       ║"
 echo    "║  ⚪ FastAPI           → http://localhost:18000       ║"
 echo    "║  ⚪ Streamlit         → http://localhost:18501       ║"

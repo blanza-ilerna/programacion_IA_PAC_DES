@@ -32,7 +32,7 @@ Debe mostrar exactamente **3 jobs RUNNING**:
 | `sensor-analytics-tumble-1min` | flink_analytics_job |
 | `sensor-hash-chain-verifier` | flink_hash_verifier_job |
 
-> El cold path (MinIO) lo gestiona **`kafka_to_minio.py`** (proceso Python), no Flink.
+> El cold path (RustFS) lo gestiona **`kafka_to_minio.py`** (proceso Python), no Flink.
 
 ### Ver todos los jobs (incluye FAILED/CANCELED)
 ```bash
@@ -151,7 +151,7 @@ curl -s -X POST 'http://influxdb:8086/api/v2/query?org=ilerna' \
 
 ---
 
-## 4. MinIO (Cold Path)
+## 4. RustFS (Cold Path)
 
 ### Ver archivos en el datalake
 ```bash
@@ -165,7 +165,7 @@ for o in objs[:10]:
 "
 ```
 
-### MinIO writer (cold path)
+### RustFS writer (cold path)
 
 El cold path usa `kafka_to_minio.py` — arranca automáticamente con `init_pipeline.sh`.
 Si no está corriendo:
@@ -269,7 +269,7 @@ Seguir este orden cuando el pipeline no funciona:
    → Ejecutar query directa via /api/ds/query
    → Si query OK pero dashboard "No data": cambiar rango de tiempo
 
-6. ¿MinIO tiene archivos?
+6. ¿RustFS tiene archivos?
    → python3 -c "from minio import Minio; ..."
    → Si no después de 10 min: minio-writer &
 ```
@@ -285,7 +285,7 @@ Seguir este orden cuando el pipeline no funciona:
 | `flink-restart` | Relanza los 3 jobs Flink |
 | `sim` | Simulador de sensores (5 máquinas) |
 | `bridge` | Puente MQTT → Redpanda |
-| `minio-writer` | Writer Python directo sensors_clean → MinIO |
+| `minio-writer` | Writer Python directo sensors_clean → RustFS |
 | `verify` | Verificación rápida del pipeline |
 | `verify-db` | Verificación detallada de bases de datos y Grafana |
 | `resources` | CPU, RAM, disco y stats de contenedores |

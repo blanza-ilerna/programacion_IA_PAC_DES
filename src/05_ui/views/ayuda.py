@@ -36,7 +36,7 @@ def render() -> None:
     | **📡 Tiempo Real** | Temperatura actual de cada máquina. Indicadores con alerta si supera el umbral. |
     | **📈 Historial** | Serie temporal de temperatura normalizada. Selecciona una o varias máquinas. |
     | **⚠️ Alertas** | Registros donde la temperatura promedio superó el umbral configurado. |
-    | **🗄️ Lambda Query** | Query federada: combina InfluxDB (hot path) y MinIO (cold path) con DuckDB. |
+    | **🗄️ Lambda Query** | Query federada: combina InfluxDB (hot path) y RustFS (cold path) con DuckDB. |
     | **🤖 IA Anomalías** | IsolationForest desde FastAPI. Envía datos en batch y colorea por probabilidad de fallo. |
     | **🏥 Pipeline Health** | Estado de servicios, jobs Flink activos y topics Kafka. |
     | **🔐 Hash Chain** | Integridad SHA256 por dispositivo. Muestra mensajes rechazados en el DLQ. |
@@ -62,7 +62,7 @@ def render() -> None:
                                                     |
                                 ┌───────────────────┤
                            [InfluxDB]           [kafka_to_minio.py]
-                        (hot path, <1min)       [MinIO NDJSON]
+                        (hot path, <1min)       [RustFS NDJSON]
                                 |               (cold path, 60s)
                            [FastAPI]
                            [Streamlit ← este dashboard]
@@ -140,7 +140,7 @@ python src/01_ingestion/mqtt_to_redpanda_bridge.py
 # 3. Jobs Flink (desde el jobmanager)
 flink-restart
 
-# 4. Cold path: Kafka → MinIO
+# 4. Cold path: Kafka → RustFS
 python src/03_storage/kafka_to_minio.py
 # alias: minio-writer
 
@@ -166,8 +166,8 @@ streamlit run src/05_ui/app.py --server.port 8501
         ("InfluxDB",        "18086",       "Series temporales (hot path)",   "admin / Ilerna_Programaci0n"),
         ("Streamlit",       "18501",       "Este dashboard",                 "—"),
         ("JupyterLab",      "18888",       "Notebooks de análisis",          "—"),
-        ("MinIO S3 API",    "19000",       "API S3 compatible",              "admin / Ilerna_Programaci0n"),
-        ("MinIO Console",   "19001",       "Consola web MinIO",              "admin / Ilerna_Programaci0n"),
+        ("RustFS S3 API",    "19000",       "API S3 compatible",              "admin / Ilerna_Programaci0n"),
+        ("RustFS Console",   "19001",       "Consola web RustFS",              "admin / Ilerna_Programaci0n"),
         ("Redpanda",        "19092",       "Broker Kafka-compatible",        "—"),
     ]
     st.dataframe(

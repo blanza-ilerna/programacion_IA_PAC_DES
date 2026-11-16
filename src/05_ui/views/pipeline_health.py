@@ -46,9 +46,9 @@ def render() -> None:
     with svc_cols[3]:
         try:
             r = requests.get(minio_url, timeout=3)
-            st.success("🟢 **MinIO**\n\nOK") if r.ok else st.error(f"🔴 **MinIO**\n\nHTTP {r.status_code}")
+            st.success("🟢 **RustFS**\n\nOK") if r.ok else st.error(f"🔴 **RustFS**\n\nHTTP {r.status_code}")
         except Exception:
-            st.error("🔴 **MinIO**\n\nSin respuesta")
+            st.error("🔴 **RustFS**\n\nSin respuesta")
 
     st.divider()
 
