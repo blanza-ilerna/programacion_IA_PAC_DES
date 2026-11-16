@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -320,7 +320,7 @@
       "id": 6,
       "type": "stat",
       "title": "sensors_raw — mensajes acumulados",
-      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "description": "High watermark (offset final) de la partición 0, vía la API REST de Redpanda Console. Es un acumulado desde que se creó el topic, no una tasa; se reinicia a 0 al ejecutar init_pipeline.sh.",
       "gridPos": {
         "x": 0,
         "y": 10,
@@ -348,7 +348,7 @@
             "fixedColor": "blue"
           },
           "unit": "short",
-          "noValue": "sin datos (¿Pandaproxy :8082?)"
+          "noValue": "sin datos"
         }
       },
       "targets": [
@@ -358,14 +358,14 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:8082/topics/sensors_raw/partitions/0/offsets",
+          "url": "http://redpanda-console:8080/api/topics/sensors_raw/partitions",
           "url_options": {
             "method": "GET"
           },
-          "root_selector": "",
+          "root_selector": "partitions",
           "columns": [
             {
-              "selector": "end_offset",
+              "selector": "waterMarkHigh",
               "text": "Mensajes",
               "type": "number"
             }
@@ -377,7 +377,7 @@
       "id": 7,
       "type": "stat",
       "title": "sensors_clean — mensajes acumulados",
-      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "description": "High watermark (offset final) de la partición 0, vía la API REST de Redpanda Console. Es un acumulado desde que se creó el topic, no una tasa; se reinicia a 0 al ejecutar init_pipeline.sh.",
       "gridPos": {
         "x": 6,
         "y": 10,
@@ -405,7 +405,7 @@
             "fixedColor": "green"
           },
           "unit": "short",
-          "noValue": "sin datos (¿Pandaproxy :8082?)"
+          "noValue": "sin datos"
         }
       },
       "targets": [
@@ -415,14 +415,14 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:8082/topics/sensors_clean/partitions/0/offsets",
+          "url": "http://redpanda-console:8080/api/topics/sensors_clean/partitions",
           "url_options": {
             "method": "GET"
           },
-          "root_selector": "",
+          "root_selector": "partitions",
           "columns": [
             {
-              "selector": "end_offset",
+              "selector": "waterMarkHigh",
               "text": "Mensajes",
               "type": "number"
             }
@@ -434,7 +434,7 @@
       "id": 8,
       "type": "stat",
       "title": "sensors_verified — mensajes acumulados",
-      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "description": "High watermark (offset final) de la partición 0, vía la API REST de Redpanda Console. Es un acumulado desde que se creó el topic, no una tasa; se reinicia a 0 al ejecutar init_pipeline.sh.",
       "gridPos": {
         "x": 12,
         "y": 10,
@@ -462,7 +462,7 @@
             "fixedColor": "green"
           },
           "unit": "short",
-          "noValue": "sin datos (¿Pandaproxy :8082?)"
+          "noValue": "sin datos"
         }
       },
       "targets": [
@@ -472,14 +472,14 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:8082/topics/sensors_verified/partitions/0/offsets",
+          "url": "http://redpanda-console:8080/api/topics/sensors_verified/partitions",
           "url_options": {
             "method": "GET"
           },
-          "root_selector": "",
+          "root_selector": "partitions",
           "columns": [
             {
-              "selector": "end_offset",
+              "selector": "waterMarkHigh",
               "text": "Mensajes",
               "type": "number"
             }
@@ -491,7 +491,7 @@
       "id": 9,
       "type": "stat",
       "title": "sensors_invalid — mensajes acumulados (DLQ)",
-      "description": "Offset final de la partición 0 (Pandaproxy). Es un acumulado desde que se creó el topic, no una tasa. Se reinicia a 0 al ejecutar init_pipeline.sh.",
+      "description": "High watermark (offset final) de la partición 0, vía la API REST de Redpanda Console. Es un acumulado desde que se creó el topic, no una tasa; se reinicia a 0 al ejecutar init_pipeline.sh.",
       "gridPos": {
         "x": 18,
         "y": 10,
@@ -518,7 +518,7 @@
             "mode": "thresholds"
           },
           "unit": "short",
-          "noValue": "sin datos (¿Pandaproxy :8082?)",
+          "noValue": "sin datos",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -545,14 +545,14 @@
           "source": "url",
           "format": "table",
           "parser": "backend",
-          "url": "http://redpanda:8082/topics/sensors_invalid/partitions/0/offsets",
+          "url": "http://redpanda-console:8080/api/topics/sensors_invalid/partitions",
           "url_options": {
             "method": "GET"
           },
-          "root_selector": "",
+          "root_selector": "partitions",
           "columns": [
             {
-              "selector": "end_offset",
+              "selector": "waterMarkHigh",
               "text": "Mensajes",
               "type": "number"
             }

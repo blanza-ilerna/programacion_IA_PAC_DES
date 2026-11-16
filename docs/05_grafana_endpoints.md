@@ -29,14 +29,25 @@ Todos los hostnames son internos a la red Docker (`ilerna_ia_big_data`). Grafana
 > **Notas:**
 > - `GET /v1/cluster` devuelve **404 en Redpanda v25** — usar `/v1/cluster/health_overview`.
 > - `GET /v1/topics` (listado de todos los topics) también devuelve 404. La tabla de topics del dashboard usa datos inline estáticos.
-> - La Admin API **no** da el número de mensajes por topic (`/v1/partitions/kafka/{topic}/0` no incluye `high_watermark`). Para eso se usa Pandaproxy (siguiente sección).
+> - La Admin API **no** da el número de mensajes por topic (`/v1/partitions/kafka/{topic}/0` no incluye `high_watermark`). Para eso se usa la API REST de Redpanda Console (ver más abajo).
 
 ### Redpanda — Pandaproxy HTTP (puerto 8082)
 
 | Endpoint | Descripción | Formato respuesta |
 |---|---|---|
 | `http://redpanda:8082/topics` | Lista de nombres de topics | Array de strings |
-| `http://redpanda:8082/topics/{topic}/partitions/0/offsets` | Offsets de la partición 0 | `{"beginning_offset": 0, "end_offset": N}` — `end_offset` = mensajes acumulados |
+
+> En Redpanda v25.3 la ruta `/topics/{topic}/partitions/0/offsets` (y `/topics/{topic}`) devuelve **404** (`{"message": "Not found"}`). Pandaproxy solo se usa para listar topics.
+
+### Redpanda Console — API REST (puerto 8080)
+
+| Endpoint | Descripción | Formato respuesta |
+|---|---|---|
+| `http://redpanda-console:8080/api/topics` | Topics con particiones, réplicas y tamaño en disco | `{"topics": [{"topicName", "partitionCount", "logDirSummary": {"totalSizeBytes"}, ...}]}` |
+| `http://redpanda-console:8080/api/topics/{topic}/partitions` | Particiones con offsets | `{"partitions": [{"id", "waterMarkLow", "waterMarkHigh", ...}]}` — `waterMarkHigh` = mensajes acumulados |
+
+> Comprobado en el Codespace: `waterMarkHigh` de `sensors_raw` coincide con la métrica `redpanda_kafka_max_offset` de `http://redpanda:9644/public_metrics`.
+> El host `http://redpanda-console:8080` tiene que estar en `allowedHosts` del datasource Infinity (`datasources.yml`); los datasources solo se releen al reiniciar Grafana.
 
 ### Flink — REST API (puerto 8081)
 
@@ -79,7 +90,7 @@ Los dashboards están definidos en `config/grafana/provisioning/dashboards/` y G
 
 **Telemetría IoT** (`machine_stats`, variable `$device` multiselección, refresco 10 s, rango 30 min): KPIs (máquinas con datos, en alerta, media y máximo, *último dato hace*), temperatura por máquina con la zona de umbral a 80 °C, temperatura actual (bargauge), línea de estado de alerta por máquina, ventanas en alerta cada 5 min, lecturas procesadas por minuto y tabla de estado.
 
-**Redpanda / Kafka**: brokers, salud del cluster, definición de topics (datos fijos) y mensajes acumulados por topic vía Pandaproxy (el del DLQ se pone naranja/rojo al crecer).
+**Redpanda / Kafka**: brokers, salud del cluster, definición de topics (datos fijos) y mensajes acumulados por topic vía la API REST de Redpanda Console (el del DLQ se pone naranja/rojo al crecer).
 
 ### Comprobar qué paneles tendrán datos
 

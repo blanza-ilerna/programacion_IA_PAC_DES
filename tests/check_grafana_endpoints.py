@@ -91,23 +91,24 @@ def main() -> None:
     check_field("brokers", f"{REDPANDA_ADMIN}/v1/brokers", "node_id")
     check_field("health_overview", f"{REDPANDA_ADMIN}/v1/cluster/health_overview", "is_healthy")
 
-    print("\n── Mensajes por topic (redpanda.json, paneles 6-9)")
+    print("\n── Mensajes por topic (redpanda.json, paneles 6-9: API REST de Redpanda Console)")
     for t in TOPICS:
-        check_field(f"Pandaproxy {t}", f"{REDPANDA_PROXY}/topics/{t}/partitions/0/offsets", "end_offset")
-    check_field("Admin API partitions (antiguo, ¿high_watermark?)",
-                f"{REDPANDA_ADMIN}/v1/partitions/kafka/sensors_raw/0", "high_watermark", required=False)
+        url = f"{CONSOLE_URL}/api/topics/{t}/partitions"
+        try:
+            parts = get_json(url).get("partitions", [])
+            hw = parts[0].get("waterMarkHigh") if parts else None
+            report("OK" if hw is not None else "FAIL", f"Console {t}",
+                   f"waterMarkHigh={hw}" if hw is not None else f"sin 'partitions[0].waterMarkHigh' en {url}")
+        except urllib.error.HTTPError as e:
+            report("FAIL", f"Console {t}", f"HTTP {e.code} en {url}")
+        except Exception as e:
+            report("FAIL", f"Console {t}", f"{type(e).__name__}: {e} ({url})")
 
-    print("\n── Fuentes alternativas de offsets (diagnóstico, solo INFO)")
-    try:
-        topics = get_json(f"{REDPANDA_PROXY}/topics")
-        report("OK" if "sensors_raw" in topics else "INFO", "Pandaproxy lista de topics", str(topics)[:140])
-    except urllib.error.HTTPError as e:
-        report("INFO", "Pandaproxy lista de topics", f"HTTP {e.code} — {e.read().decode('utf-8', 'replace')[:120]}")
-    except Exception as e:
-        report("INFO", "Pandaproxy lista de topics", f"{type(e).__name__}: {e}")
-    check_field("Pandaproxy detalle topic", f"{REDPANDA_PROXY}/topics/sensors_raw", "name", required=False)
-    check_field("Console REST /api/topics", f"{CONSOLE_URL}/api/topics", "topics", required=False)
-    check_field("Console REST partitions", f"{CONSOLE_URL}/api/topics/sensors_raw/partitions", "partitions", required=False)
+    print("\n── Fuentes descartadas / alternativas (solo INFO)")
+    check_field("Pandaproxy offsets (no existe en Redpanda v25: 404)",
+                f"{REDPANDA_PROXY}/topics/sensors_raw/partitions/0/offsets", "end_offset", required=False)
+    check_field("Admin API partitions (sin high_watermark)",
+                f"{REDPANDA_ADMIN}/v1/partitions/kafka/sensors_raw/0", "high_watermark", required=False)
     try:
         with urllib.request.urlopen(f"{REDPANDA_ADMIN}/public_metrics", timeout=5) as r:
             text = r.read().decode("utf-8", "replace")
@@ -138,7 +139,7 @@ def main() -> None:
 
     print("\n── Flink / FastAPI (opcionales)")
     check_field("Flink jobs/overview", f"{FLINK_URL}/jobs/overview", "jobs", required=False)
-    check_field("FastAPI machines/status", f"{FASTAPI_URL}/machines/status", "device_id", required=False)
+    check_field("FastAPI machines/status", f"{FASTAPI_URL}/machines/status", "machines", required=False)
 
     print(f"\n  {'Todo OK' if FAILS == 0 else f'{FAILS} comprobación(es) fallida(s)'}\n")
     sys.exit(FAILS)
