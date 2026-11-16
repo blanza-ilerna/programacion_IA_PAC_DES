@@ -95,9 +95,18 @@ Sistema de telemetría IoT con procesamiento en tiempo real para monitorización
 > La imagen no incluye el cliente `mc`.
 >
 > **Consola web (:19001).** Exige login (`admin` / `Ilerna_Programaci0n`; no existe modo anónimo). En
-> Codespaces el login puede fallar con `SignatureDoesNotMatch` por el proxy de puertos. Alternativa sin
-> consola: `python tests/list_datalake.py` (lista objetos, tamaños y particiones; `--preview` muestra
-> el contenido del último archivo).
+> Codespaces el login puede fallar con `SignatureDoesNotMatch` por el proxy de puertos. Alternativas
+> (las prepara `init_pipeline.sh`; si alguna falla solo avisa, no bloquea nada):
+>
+> | Herramienta | Cómo | Para qué |
+> |---|---|---|
+> | **Cliente web S3** (s3manager) | puerto **19002** en la pestaña Ports · `s3web start\|stop\|status` | Navegar buckets y descargar archivos. **Solo lectura**. Firma desde el servidor, así que no le afecta el proxy |
+> | **AWS CLI** (perfil `rustfs`) | `s3 ls s3://datalake/ --recursive --human-readable` · `s3 cp s3://datalake/<clave> -` | Terminal: listar, ver contenido, descargar |
+> | **Script Python** | `python tests/list_datalake.py [--preview]` | Resumen de objetos, tamaños y particiones por hora |
+>
+> El AWS CLI se instala como binario en `~/.local` (no toca los paquetes Python del proyecto) mediante
+> `.devcontainer/setup_s3_cli.sh`, y s3manager se lanza con `docker run` desde `.devcontainer/s3web.sh`
+> (no está en el compose: si su imagen fallara, el Codespace seguiría arrancando).
 
 ## Estructura del proyecto
 

@@ -181,6 +181,14 @@ else
   fi
 fi
 
+# ── Herramientas S3 opcionales (nunca bloquean el pipeline) ──
+# AWS CLI con perfil "rustfs" + función `s3`, y cliente web s3manager en :19002.
+echo ""
+echo ">>> Herramientas S3 (opcionales: si fallan, solo avisan)..."
+_INIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "${_INIT_DIR}/setup_s3_cli.sh" || true
+bash "${_INIT_DIR}/s3web.sh" start || true
+
 # ── Aliases de desarrollo ────────────────────────────────────
 BASHRC="/home/vscode/.bashrc"
 MARKER="# === ILERNA PAC DES helpers ==="
@@ -268,6 +276,7 @@ alias bridge='python src/01_ingestion/mqtt_to_redpanda_bridge.py'
 alias rustfs-writer='python src/03_storage/kafka_to_minio.py'
 alias rustfs-status='pgrep -fa kafka_to_minio && tail -20 /tmp/minio_writer.log || echo "rustfs-writer NO está corriendo. Lanza: rustfs-writer &"'
 alias rustfs-log='tail -f /tmp/minio_writer.log'
+alias s3web='bash /workspaces/programacion_IA_PAC_DES/.devcontainer/s3web.sh'
 alias api='uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload'
 alias ui='streamlit run src/05_ui/app.py --server.port 8501'
 alias nb='jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --ServerApp.token="" --ServerApp.password="" --NotebookApp.token="" --NotebookApp.password=""'
@@ -291,6 +300,8 @@ alias aliases='echo "
   rustfs-writer  → Cold path: kafka_to_minio.py (lanzar en background: rustfs-writer &)
   rustfs-status  → Verifica si rustfs-writer está corriendo + últimas líneas de log
   rustfs-log     → Sigue el log de rustfs-writer en tiempo real
+  s3             → AWS CLI contra RustFS (ej.: s3 ls s3://datalake/ --recursive)
+  s3web          → Cliente web S3 en :19002 (s3web start|stop|status)
   api            → FastAPI en :8000
   ui             → Streamlit dashboard en :8501
   nb             → JupyterLab en :8888
@@ -322,12 +333,13 @@ echo "╠═══════════════════════�
 echo -e "║  ${RED}🔴${NC} Redpanda Console  → http://localhost:18080       ║"
 echo -e "║  ${YELLOW}🟠${NC} Flink UI          → http://localhost:18081       ║"
 echo -e "║  ${YELLOW}🟡${NC} InfluxDB UI       → http://localhost:18086       ║"
-echo -e "║  ${GREEN}🟢${NC} RustFS Console     → http://localhost:19001       ║"
+echo -e "║  ${GREEN}🟢${NC} RustFS Console    → http://localhost:19001       ║"
+echo -e "║  ${GREEN}🟢${NC} S3 Web (lectura)  → http://localhost:19002       ║"
 echo -e "║  ${CYAN}🔵${NC} Grafana           → http://localhost:13000       ║"
 echo    "║  ⚪ FastAPI           → http://localhost:18000       ║"
 echo    "║  ⚪ Streamlit         → http://localhost:18501       ║"
 echo    "║  ⚪ Jupyter           → http://localhost:18888       ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "    Aliases disponibles: sim | bridge | rustfs-writer | rustfs-status | rustfs-log | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
+echo "    Aliases disponibles: sim | bridge | rustfs-writer | rustfs-status | rustfs-log | s3 | s3web | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
 echo ""
