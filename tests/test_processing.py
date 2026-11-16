@@ -27,7 +27,7 @@ from src.processing.validators import (
 )
 from src.processing.hash_chain import (
     compute_hash, verify_message, verify_chain, chain_integrity_report,
-    GENESIS_HASH, HASH_FIELDS,
+    GENESIS_HASH, EXCLUDE_FROM_HASH,
 )
 
 
@@ -320,13 +320,20 @@ class TestComputeHash:
         h2 = compute_hash(msg2, GENESIS_HASH)
         assert h1 != h2
 
-    def test_uses_only_hash_fields(self):
-        """Campos extra no participan en el hash."""
+    def test_excluded_fields_do_not_affect_hash(self):
+        """Los campos de EXCLUDE_FROM_HASH (hash, prev_hash y los añadidos por
+        el bridge) no participan en el hash; cualquier otro campo sí."""
         msg = _raw_msg()
         h1 = compute_hash(msg, GENESIS_HASH)
-        msg_extra = dict(msg, extra_field="ignored")
-        h2 = compute_hash(msg_extra, GENESIS_HASH)
-        assert h1 == h2
+        for field in EXCLUDE_FROM_HASH:
+            assert compute_hash(dict(msg, **{field: "otro"}), GENESIS_HASH) == h1, field
+
+    def test_unlisted_extra_field_changes_hash(self):
+        """El simulador firma todos los campos salvo los excluidos, por lo que
+        un campo extra distinto sí altera el hash (detecta manipulación)."""
+        msg = _raw_msg()
+        h1 = compute_hash(msg, GENESIS_HASH)
+        assert compute_hash(dict(msg, extra_field="x"), GENESIS_HASH) != h1
 
 
 class TestVerifyMessage:
