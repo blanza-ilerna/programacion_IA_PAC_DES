@@ -305,6 +305,7 @@ Seguir este orden cuando el pipeline no funciona:
 | `rustfs-status` / `rustfs-log` | Estado y log del writer del cold path |
 | `s3` | AWS CLI contra RustFS (`s3 ls s3://datalake/ --recursive`) |
 | `s3web` | Cliente web S3 en :19002 (`s3web start\|stop\|status`) |
+| `dps` / `dc` | Estado de contenedores / `docker compose` del proyecto de Codespaces (`dc logs grafana`) |
 | `python tests/list_datalake.py` | Contenido del bucket sin consola web |
 | `python tests/check_grafana_panels.py` | Error real de cada panel de Grafana |
 | `verify` | Verificación rápida del pipeline |

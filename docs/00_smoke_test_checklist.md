@@ -505,9 +505,12 @@ jupyter nbconvert --to notebook --execute notebooks/01_exploracion_datos.ipynb \
 ## Apéndice — Comandos de recuperación
 
 ```bash
-# Reiniciar todo el entorno Docker
-docker compose -f .devcontainer/docker-compose.yml down --remove-orphans
-docker compose -f .devcontainer/docker-compose.yml up -d
+# Reiniciar los contenedores del Codespace (dc = docker compose del proyecto de Codespaces)
+dc restart            # todos   ·   dc restart grafana   → solo uno
+dps                   # estado (equivale a docker compose ps)
+# Si hay que recrearlos: Ctrl+Shift+P → "Codespaces: Rebuild Container".
+# NO usar "docker compose -f .devcontainer/docker-compose.yml up -d": crea un SEGUNDO
+# proyecto (nombre distinto al de Codespaces) y choca con los puertos.
 
 # Ver logs de un servicio
 docker logs $(docker ps -qf "label=com.docker.compose.service=jobmanager") --tail=100 -f
