@@ -105,8 +105,12 @@ bash tests/test_connectivity.sh
 
 Si algún servicio falla, reiniciar:
 ```bash
-docker compose -f .devcontainer/docker-compose.yml down --remove-orphans
-docker compose -f .devcontainer/docker-compose.yml up -d
+# Reiniciar los contenedores del Codespace (dc = docker compose del proyecto de Codespaces)
+dc restart            # todos   ·   dc restart grafana   → solo uno
+dps                   # estado (equivale a docker compose ps)
+# Si hay que recrearlos: Ctrl+Shift+P → "Codespaces: Rebuild Container".
+# NO usar "docker compose -f .devcontainer/docker-compose.yml up -d": crea un SEGUNDO
+# proyecto (nombre distinto al de Codespaces) y choca con los puertos.
 ```
 
 ### Paso 1 — Verificar Flink

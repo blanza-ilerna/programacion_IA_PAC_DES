@@ -312,6 +312,20 @@ El notebook cubre: hot path (InfluxDB), cold path (RustFS NDJSON vía DuckDB), L
 
 ## Resolución de problemas
 
+### `docker compose ps` no muestra nada o da error
+
+El compose está en `.devcontainer/` y Codespaces lo arranca con **su propio nombre de proyecto**,
+así que `docker compose ps` desde la raíz no lo encuentra. Usa los helpers (tras `init_pipeline.sh`):
+
+```bash
+dps                    # estado de los contenedores (equivale a docker compose ps)
+dc logs -f grafana     # docker compose del proyecto de Codespaces
+dc restart grafana
+```
+
+No uses `docker compose -f .devcontainer/docker-compose.yml up -d`: crea un **segundo** proyecto
+que choca con los puertos del primero. Para recrear todo: *Codespaces: Rebuild Container*.
+
 ### Flink jobs caídos
 
 Si `flink-list` muestra menos de 3 jobs `RUNNING`:
@@ -421,6 +435,8 @@ pgrep -fa kafka_to_minio
 
 **Causa:** el simulador arrancó antes que el hash verifier, o el Codespace fue reiniciado
 (los topics conservan mensajes de la sesión anterior y la cadena hash se rompe).
+Si `sensors_verified` se queda **congelado** mientras `sensors_raw` crece, el simulador es anterior
+a la corrección del fallo `broken_chain` (`git pull` y reinicia `sim`).
 
 **Solución — purgar topics y reiniciar en orden correcto:**
 

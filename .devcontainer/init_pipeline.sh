@@ -203,6 +203,12 @@ cat >> "${BASHRC}" << 'BASHRC_EOF'
 jm()  { docker ps -qf "label=com.docker.compose.service=jobmanager"; }
 rp()  { docker ps -qf "label=com.docker.compose.service=redpanda";   }
 
+# Proyecto compose del Codespace (Codespaces le pone nombre propio y el compose está en
+# .devcontainer/, por eso "docker compose ps" a secas no encuentra nada).
+compose-project() { docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$(docker ps -qf 'label=com.docker.compose.service=workspace' | head -1)" 2>/dev/null; }
+dc()  { docker compose -p "$(compose-project)" "$@"; }
+dps() { docker ps -a --filter "label=com.docker.compose.project=$(compose-project)" --format 'table {{.Label "com.docker.compose.service"}}\t{{.Status}}\t{{.Ports}}'; }
+
 flink-run()  { docker exec "$(jm)" flink run "$@"; }
 flink-list() { curl -s http://jobmanager:8081/jobs | python3 -m json.tool; }
 flink-jobs() { curl -s http://jobmanager:8081/jobs/overview | python3 -c "import sys,json; [print(j['jid'][:8], j['state'], j['name'][:60]) for j in json.load(sys.stdin)['jobs'] if j['state'] not in ('CANCELED','FAILED','FINISHED')]"; }
@@ -302,6 +308,8 @@ alias aliases='echo "
   rustfs-log     → Sigue el log de rustfs-writer en tiempo real
   s3             → AWS CLI contra RustFS (ej.: s3 ls s3://datalake/ --recursive)
   s3web          → Cliente web S3 en :19002 (s3web start|stop|status)
+  dps            → Estado de los contenedores del compose (equivale a docker compose ps)
+  dc             → docker compose del proyecto (ej.: dc ps, dc logs grafana, dc restart grafana)
   api            → FastAPI en :8000
   ui             → Streamlit dashboard en :8501
   nb             → JupyterLab en :8888
@@ -341,5 +349,5 @@ echo    "║  ⚪ Streamlit         → http://localhost:18501       ║"
 echo    "║  ⚪ Jupyter           → http://localhost:18888       ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "    Aliases disponibles: sim | bridge | rustfs-writer | rustfs-status | rustfs-log | s3 | s3web | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
+echo "    Aliases disponibles: sim | bridge | rustfs-writer | rustfs-status | rustfs-log | s3 | s3web | dps | dc | api | ui | nb | flink-run | flink-list | flink-jobs | flink-restart | mqtt-sub | verify | aliases"
 echo ""

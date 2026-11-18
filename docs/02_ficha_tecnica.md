@@ -18,7 +18,7 @@
 | Storage       | `influxdb`          | InfluxDB 2.x            | **18086**      | 8086           | Series temporales. Measurement `machine_stats` (Hot Path).    |
 | Storage       | `minio`             | RustFS 1.0.6 (S3)       | **19000**      | 9000           | API S3. Bucket `datalake/clean/` con archivos NDJSON (Cold Path). El servicio conserva el nombre `minio`. |
 | Storage       | `minio`             | Consola web RustFS      | **19001**      | 9001           | Consola del mismo contenedor. En Codespaces el login puede fallar (SignatureDoesNotMatch tras el proxy). |
-| Storage       | `s3web`             | s3manager v0.13.0       | **19002**      | 8080           | Cliente web S3 de solo lectura (lo lanza `init_pipeline.sh` con `docker run`; no está en el compose). |
+| Storage       | `s3web`             | s3manager v0.13.0       | **19002**      | 19002          | Cliente web S3 de solo lectura. Lo lanza `init_pipeline.sh` con `docker run` compartiendo la red del devcontainer (`--network container:workspace`): no publica puertos en el host. |
 | Servicio      | `fastapi`           | Python + Uvicorn        | **18000**      | 8000           | API REST: estado de máquinas, alertas, historial, predict (IsolationForest), model/train. |
 | Analítica     | `streamlit`         | Python Framework        | **18501**      | 8501           | Dashboard: tiempo real, historial, alertas, Lambda Query, IA Anomalías, Pipeline Health, Hash Chain, Modelos Avanzados, Ayuda. |
 | Analítica     | `duckdb`            | OLAP In-process         | N/A            | N/A            | Motor SQL embebido. Lee NDJSON desde RustFS vía extensión `httpfs` con `hive_partitioning=true`. |
